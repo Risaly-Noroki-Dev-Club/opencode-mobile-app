@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">OpenCode Mobile</string>
+    <string name="connect_title">Connect to your remote OpenCode agent</string>
+    <string name="connect_description">The agent stays on your server. This app only talks to that authenticated gateway.</string>
+    <string name="server_url_label">Server URL</string>
+    <string name="server_url_placeholder">https://your-server.example.com</string>
+    <string name="token_label">Token</string>
+    <string name="connect_button">Connect</string>
+</resources>

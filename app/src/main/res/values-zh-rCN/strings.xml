@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">OpenCode Mobile</string>
+    <string name="connect_title">连接你的远程 OpenCode Agent</string>
+    <string name="connect_description">Agent 运行在你的服务器上。这个 App 只会连接经过认证的网关。</string>
+    <string name="server_url_label">服务器地址</string>
+    <string name="server_url_placeholder">https://你的服务器.example.com</string>
+    <string name="token_label">访问令牌</string>
+    <string name="connect_button">连接</string>
+</resources>

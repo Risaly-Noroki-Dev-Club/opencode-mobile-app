@@ -23,19 +23,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConnectScreen() {
-    var serverUrl by remember { mutableStateOf("https://your-server.example.com") }
+    val serverUrlPlaceholder = stringResource(R.string.server_url_placeholder)
+    var serverUrl by remember { mutableStateOf(serverUrlPlaceholder) }
     var token by remember { mutableStateOf("") }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("OpenCode Mobile") },
+                title = { Text(stringResource(R.string.app_name)) },
             )
         },
     ) { padding ->
@@ -47,12 +50,12 @@ fun ConnectScreen() {
             verticalArrangement = Arrangement.Center,
         ) {
             Text(
-                text = "Connect to your remote OpenCode agent",
+                text = stringResource(R.string.connect_title),
                 style = MaterialTheme.typography.headlineMedium,
             )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "The agent stays on your server. This app only talks to that authenticated gateway.",
+                text = stringResource(R.string.connect_description),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -71,14 +74,14 @@ fun ConnectScreen() {
                         value = serverUrl,
                         onValueChange = { serverUrl = it },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Server URL") },
+                        label = { Text(stringResource(R.string.server_url_label)) },
                         singleLine = true,
                     )
                     OutlinedTextField(
                         value = token,
                         onValueChange = { token = it },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Token") },
+                        label = { Text(stringResource(R.string.token_label)) },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                     )
@@ -87,7 +90,7 @@ fun ConnectScreen() {
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(18.dp),
                     ) {
-                        Text("Connect")
+                        Text(stringResource(R.string.connect_button))
                     }
                 }
             }
