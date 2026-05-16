@@ -14,10 +14,6 @@ private val TitilliumWeb = FontFamily(
     Font(R.font.titilliumweb_bold, weight = FontWeight.Bold),
 )
 
-private val OcrB = FontFamily(
-    Font(R.font.ocrb_regular, weight = FontWeight.Normal),
-)
-
 val AppTypography = Typography(
     h1 = TextStyle(fontFamily = TitilliumWeb, fontWeight = FontWeight.Bold, fontSize = 96.sp),
     h2 = TextStyle(fontFamily = TitilliumWeb, fontWeight = FontWeight.Bold, fontSize = 60.sp),
@@ -25,6 +21,6 @@ val AppTypography = Typography(
     h4 = TextStyle(fontFamily = TitilliumWeb, fontWeight = FontWeight.SemiBold, fontSize = 34.sp),
     h5 = TextStyle(fontFamily = TitilliumWeb, fontWeight = FontWeight.Normal, fontSize = 24.sp),
     h6 = TextStyle(fontFamily = TitilliumWeb, fontWeight = FontWeight.Normal, fontSize = 20.sp),
-    caption = TextStyle(fontFamily = OcrB, fontWeight = FontWeight.Normal, fontSize = 12.sp),
-    overline = TextStyle(fontFamily = OcrB, fontWeight = FontWeight.Normal, fontSize = 10.sp),
+    caption = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Normal, fontSize = 12.sp),
+    overline = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Normal, fontSize = 10.sp),
 )
