@@ -1,12 +1,16 @@
 package dev.opencode.mobile.ui.connect
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.Button
 import androidx.compose.material.Card
 import androidx.compose.material.LinearProgressIndicator
@@ -14,6 +18,7 @@ import androidx.compose.material.MaterialTheme
 import androidx.compose.material.OutlinedTextField
 import androidx.compose.material.Scaffold
 import androidx.compose.material.Text
+import androidx.compose.material.TextButton
 import androidx.compose.material.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,7 +36,9 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.R
 import dev.opencode.mobile.data.AgentClient
 import dev.opencode.mobile.data.ConnectionResult
+import dev.opencode.mobile.data.ServerHistoryEntry
 import dev.opencode.mobile.data.SettingsStore
+import dev.opencode.mobile.data.ThemeMode
 import dev.opencode.mobile.ui.ServerConnection
 import kotlinx.coroutines.launch
 
@@ -48,6 +55,10 @@ fun ConnectScreen(onConnected: (ServerConnection) -> Unit) {
     var result by remember { mutableStateOf<ConnectionResult?>(null) }
     val agentClient = remember { AgentClient() }
     val scope = rememberCoroutineScope()
+    var history by remember { mutableStateOf<List<ServerHistoryEntry>>(emptyList()) }
+    val themeMode by settingsStore.themeMode.collectAsState(initial = ThemeMode.System)
+
+    LaunchedEffect(Unit) { history = settingsStore.loadHistory() }
 
     LaunchedEffect(savedConnection) {
         val saved = savedConnection ?: return@LaunchedEffect
@@ -59,6 +70,24 @@ fun ConnectScreen(onConnected: (ServerConnection) -> Unit) {
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.app_name)) },
+                actions = {
+                    TextButton(onClick = {
+                        val next = when (themeMode) {
+                            ThemeMode.System -> ThemeMode.Light
+                            ThemeMode.Light -> ThemeMode.Dark
+                            ThemeMode.Dark -> ThemeMode.System
+                        }
+                        scope.launch { settingsStore.saveThemeMode(next) }
+                    }) {
+                        Text(
+                            when (themeMode) {
+                                ThemeMode.System -> stringResource(R.string.theme_system)
+                                ThemeMode.Light -> stringResource(R.string.theme_light)
+                                ThemeMode.Dark -> stringResource(R.string.theme_dark)
+                            },
+                        )
+                    }
+                },
             )
         },
     ) { padding ->
@@ -137,6 +166,35 @@ fun ConnectScreen(onConnected: (ServerConnection) -> Unit) {
                         ConnectionResultCard(
                             result = connectionResult,
                             connectionFailed = connectionFailed,
+                        )
+                    }
+                }
+            }
+            if (history.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = stringResource(R.string.server_history_title),
+                    style = MaterialTheme.typography.subtitle2,
+                    color = MaterialTheme.colors.onSurface.copy(alpha = 0.7f),
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                history.forEach { entry ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .clickable {
+                                serverUrl = entry.serverUrl
+                                token = entry.token
+                            },
+                        backgroundColor = MaterialTheme.colors.onSurface.copy(alpha = 0.05f),
+                        shape = MaterialTheme.shapes.medium,
+                        elevation = 0.dp,
+                    ) {
+                        Text(
+                            text = entry.serverUrl,
+                            modifier = Modifier.padding(14.dp),
+                            style = MaterialTheme.typography.body2,
                         )
                     }
                 }

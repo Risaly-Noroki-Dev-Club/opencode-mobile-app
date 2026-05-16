@@ -88,4 +88,8 @@
     <string name="clear_local_cache_description">Remove cached messages and draft for this session.</string>
     <string name="project_search_label">Search projects</string>
     <string name="recent_session_badge">Recent</string>
+    <string name="theme_system">System</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="server_history_title">Recent servers</string>
 </resources>

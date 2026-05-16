@@ -420,6 +420,13 @@ fun SessionScreen(
                     ) { Text(stringResource(R.string.scroll_bottom_button)) }
                 }
                 Spacer(modifier = Modifier.height(12.dp))
+                if (input.isNotBlank()) {
+                    Text(
+                        text = "${input.length} chars",
+                        style = MaterialTheme.typography.caption,
+                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.5f),
+                    )
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -439,7 +446,7 @@ fun SessionScreen(
                         modifier = Modifier.weight(1f),
                         label = { Text(stringResource(R.string.message_input_label)) },
                         minLines = 1,
-                        maxLines = 4,
+                        maxLines = 6,
                     )
                     Button(
                         enabled = !busy && sessionId != null && input.isNotBlank(),

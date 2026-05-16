@@ -88,4 +88,8 @@
     <string name="clear_local_cache_description">删除此会话的本地消息缓存和草稿。</string>
     <string name="project_search_label">搜索项目</string>
     <string name="recent_session_badge">最近</string>
+    <string name="theme_system">跟随系统</string>
+    <string name="theme_light">浅色</string>
+    <string name="theme_dark">深色</string>
+    <string name="server_history_title">最近连接</string>
 </resources>
