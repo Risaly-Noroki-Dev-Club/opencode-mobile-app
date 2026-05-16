@@ -60,6 +60,13 @@ import dev.opencode.mobile.data.OpenCodeStreamEvent
 import dev.opencode.mobile.data.PermissionReply
 import dev.opencode.mobile.ui.ActiveSession
 import dev.opencode.mobile.ui.ServerConnection
+import dev.opencode.mobile.ui.theme.AdventureBackground
+import dev.opencode.mobile.ui.theme.AdventureCard
+import dev.opencode.mobile.ui.theme.AdventureFilledButton
+import dev.opencode.mobile.ui.theme.AdventureOutlinedTextField
+import dev.opencode.mobile.ui.theme.AdventureTextButton
+import dev.opencode.mobile.ui.theme.AdventureTopAppBar
+import dev.opencode.mobile.ui.theme.adventure
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -106,6 +113,7 @@ fun SessionScreen(
     var streamStatus by remember { mutableStateOf(StreamStatus.Connecting) }
     var streamError by remember { mutableStateOf<String?>(null) }
     var awaitingResponse by remember { mutableStateOf(false) }
+    var waitingSinceMs by remember { mutableStateOf<Long?>(null) }
     var diffFiles by remember { mutableStateOf<List<DiffFile>>(emptyList()) }
     var pendingPermission by remember { mutableStateOf<OpenCodeStreamEvent.Permission?>(null) }
     val listState = rememberLazyListState()
@@ -179,20 +187,24 @@ fun SessionScreen(
                             when (event) {
                                 is OpenCodeStreamEvent.TextDelta -> {
                                     awaitingResponse = false
+                                    waitingSinceMs = null
                                     appendAssistantDelta(messages, event.delta)
                                 }
                                 is OpenCodeStreamEvent.TextEnded -> {
                                     awaitingResponse = false
+                                    waitingSinceMs = null
                                     finalizeAssistantText(messages, event.text)
                                 }
                                 is OpenCodeStreamEvent.Tool -> messages += ChatMessage(ChatRole.Tool, event.title)
                                 is OpenCodeStreamEvent.Error -> {
                                     awaitingResponse = false
+                                    waitingSinceMs = null
                                     messages += ChatMessage(ChatRole.System, event.message)
                                 }
                                 is OpenCodeStreamEvent.Idle -> {
                                     busy = false
                                     awaitingResponse = false
+                                    waitingSinceMs = null
                                 }
                                 is OpenCodeStreamEvent.Permission -> pendingPermission = event
                             }
@@ -366,40 +378,45 @@ fun SessionScreen(
     ) {
         Scaffold(
             topBar = {
-                TopAppBar(
+                AdventureTopAppBar(
                     title = {
                         Column {
                             Text(activeSession.title?.ifBlank { stringResource(R.string.session_title) } ?: stringResource(R.string.session_title))
                             Text(
                                 text = "${streamStatus.label()} · ${selectedModel?.label ?: activeSession.directory ?: stringResource(R.string.model_default)}",
                                 style = MaterialTheme.typography.overline,
-                                color = MaterialTheme.colors.onSurface.copy(alpha = 0.7f),
+                                color = MaterialTheme.adventure.textMedium,
                             )
                         }
                     },
                     navigationIcon = {
-                        TextButton(onClick = onBack) { Text(stringResource(R.string.back_button)) }
+                        AdventureTextButton(onClick = onBack) { Text(stringResource(R.string.back_button)) }
                     },
                     actions = {
-                        TextButton(onClick = { sheetContent = SheetContent.Navi }) {
+                        AdventureTextButton(onClick = { sheetContent = SheetContent.Navi }) {
                             Text(stringResource(R.string.navi_title))
                         }
                     },
                 )
             },
+            backgroundColor = MaterialTheme.colors.background,
         ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(16.dp),
-            ) {
+            AdventureBackground {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .padding(16.dp),
+                ) {
                 streamError?.let {
                     StatusCard(message = it)
                     Spacer(modifier = Modifier.height(8.dp))
                 }
                 if (awaitingResponse) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    ThinkingIndicator(
+                        streamStatus = streamStatus,
+                        waitingSinceMs = waitingSinceMs,
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
                 }
                 LazyColumn(
@@ -432,12 +449,12 @@ fun SessionScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Button(
+                    AdventureFilledButton(
                         onClick = { sheetContent = SheetContent.Navi },
                     ) {
                         Text(stringResource(R.string.navi_button))
                     }
-                    OutlinedTextField(
+                    AdventureOutlinedTextField(
                         value = input,
                         onValueChange = {
                             input = it
@@ -448,25 +465,29 @@ fun SessionScreen(
                         minLines = 1,
                         maxLines = 6,
                     )
-                    Button(
+                    AdventureFilledButton(
                         enabled = !busy && sessionId != null && input.isNotBlank(),
                         onClick = {
                             val text = input.trim()
-                            val activeSessionId = sessionId ?: return@Button
+                            val activeSessionId = sessionId ?: return@AdventureFilledButton
                             input = ""
                             messages += ChatMessage(ChatRole.User, text)
                             busy = true
                             awaitingResponse = true
+                            waitingSinceMs = System.currentTimeMillis()
+                            messages += ChatMessage(ChatRole.System, "Working… waiting for opencode response")
                             scope.launch {
                                 runCatching { agentClient.promptAsync(connection.serverUrl, connection.token, activeSessionId, text, selectedModel, activeSession.directory) }
                                     .onFailure {
                                         runCatching { agentClient.sendMessage(connection.serverUrl, connection.token, activeSessionId, text, selectedModel, activeSession.directory) }
                                             .onSuccess {
                                                 awaitingResponse = false
+                                                waitingSinceMs = null
                                                 messages += ChatMessage(ChatRole.Assistant, it)
                                             }
                                             .onFailure { error ->
                                                 awaitingResponse = false
+                                                waitingSinceMs = null
                                                 messages += ChatMessage(ChatRole.System, error.message ?: "Send failed")
                                             }
                                         busy = false
@@ -483,6 +504,31 @@ fun SessionScreen(
                     }
                 }
             }
+        }
+    }
+}
+}
+
+@Composable
+private fun ThinkingIndicator(streamStatus: StreamStatus, waitingSinceMs: Long?) {
+    val elapsed = waitingSinceMs?.let { ((System.currentTimeMillis() - it) / 1000).coerceAtLeast(0) }
+    AdventureCard(
+        modifier = Modifier.fillMaxWidth(),
+        backgroundColor = MaterialTheme.adventure.infoContainer,
+        elevation = 0.dp,
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = if (elapsed != null) {
+                    "Working… ${streamStatus.label()} · ${elapsed}s"
+                } else {
+                    "Working… ${streamStatus.label()}"
+                },
+                style = MaterialTheme.typography.caption,
+                color = MaterialTheme.colors.onSurface.copy(alpha = 0.78f),
+            )
         }
     }
 }
