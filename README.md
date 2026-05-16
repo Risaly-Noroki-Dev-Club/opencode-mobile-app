@@ -40,7 +40,7 @@ Theme requirements:
 - Use a custom fallback color scheme on older Android versions.
 - Keep destructive/high-risk permission UI independent from dynamic color when needed.
 
-Build note:
+Build:
 
-- The Gradle project files are scaffolded, but the Gradle wrapper is not checked in yet.
-- Add a wrapper with a local Android/Gradle setup before expecting `./gradlew :app:assembleDebug` to work.
+- `./gradlew :app:assembleDebug`
+- Debug APK output: `app/build/outputs/apk/debug/app-debug.apk`
