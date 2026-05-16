@@ -7,8 +7,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material.MaterialTheme
+import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,27 +26,27 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier) {
                 is MarkdownBlock.Heading -> Text(
                     text = block.text,
                     style = when (block.level) {
-                        1 -> MaterialTheme.typography.titleLarge
-                        2 -> MaterialTheme.typography.titleMedium
-                        else -> MaterialTheme.typography.titleSmall
+                        1 -> MaterialTheme.typography.subtitle1
+                        2 -> MaterialTheme.typography.subtitle2
+                        else -> MaterialTheme.typography.overline
                     },
                     fontWeight = FontWeight.SemiBold,
                 )
                 is MarkdownBlock.Quote -> Text(
                     text = block.text,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.body2,
+                    color = MaterialTheme.colors.onSurface.copy(alpha = 0.7f),
                     modifier = Modifier
                         .clip(RoundedCornerShape(14.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainer)
+                        .background(MaterialTheme.colors.onSurface.copy(alpha = 0.05f))
                         .padding(12.dp),
                 )
                 is MarkdownBlock.ListItems -> Column {
                     block.items.forEach { item ->
-                        Text(text = "• $item", style = MaterialTheme.typography.bodyMedium)
+                        Text(text = "• $item", style = MaterialTheme.typography.body2)
                     }
                 }
-                is MarkdownBlock.Paragraph -> Text(text = block.text, style = MaterialTheme.typography.bodyMedium)
+                is MarkdownBlock.Paragraph -> Text(text = block.text, style = MaterialTheme.typography.body2)
             }
         }
     }
@@ -58,20 +58,20 @@ private fun CodeBlock(code: String, language: String?) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .background(MaterialTheme.colors.onSurface.copy(alpha = 0.12f))
             .padding(14.dp),
     ) {
         if (!language.isNullOrBlank()) {
             Text(
                 text = language,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.overline,
+                color = MaterialTheme.colors.primary,
             )
             Spacer(modifier = Modifier.height(6.dp))
         }
         Text(
             text = code.trimEnd(),
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.caption,
             fontFamily = FontFamily.Monospace,
         )
     }

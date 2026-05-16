@@ -7,17 +7,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material.Button
+import androidx.compose.material.Card
+import androidx.compose.material.LinearProgressIndicator
+import androidx.compose.material.MaterialTheme
+import androidx.compose.material.OutlinedTextField
+import androidx.compose.material.Scaffold
+import androidx.compose.material.Text
+import androidx.compose.material.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -38,7 +35,6 @@ import dev.opencode.mobile.data.SettingsStore
 import dev.opencode.mobile.ui.ServerConnection
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConnectScreen(onConnected: (ServerConnection) -> Unit) {
     val context = LocalContext.current
@@ -75,20 +71,19 @@ fun ConnectScreen(onConnected: (ServerConnection) -> Unit) {
         ) {
             Text(
                 text = stringResource(R.string.connect_title),
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.h5,
             )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = stringResource(R.string.connect_description),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.body1,
+                color = MaterialTheme.colors.onSurface.copy(alpha = 0.7f),
             )
             Spacer(modifier = Modifier.height(32.dp))
             Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                ),
-                shape = RoundedCornerShape(28.dp),
+                backgroundColor = MaterialTheme.colors.onSurface.copy(alpha = 0.08f),
+                shape = MaterialTheme.shapes.large,
+                elevation = 2.dp,
             ) {
                 Column(
                     modifier = Modifier.padding(20.dp),
@@ -125,7 +120,7 @@ fun ConnectScreen(onConnected: (ServerConnection) -> Unit) {
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(18.dp),
+                        shape = MaterialTheme.shapes.medium,
                         enabled = !isConnecting,
                     ) {
                         Text(
@@ -154,12 +149,12 @@ fun ConnectScreen(onConnected: (ServerConnection) -> Unit) {
 @Composable
 private fun ConnectionResultCard(result: ConnectionResult, connectionFailed: String) {
     val containerColor = when (result) {
-        is ConnectionResult.Success -> MaterialTheme.colorScheme.primaryContainer
-        is ConnectionResult.Failure -> MaterialTheme.colorScheme.errorContainer
+        is ConnectionResult.Success -> MaterialTheme.colors.primary.copy(alpha = 0.12f)
+        is ConnectionResult.Failure -> MaterialTheme.colors.error.copy(alpha = 0.12f)
     }
     val contentColor = when (result) {
-        is ConnectionResult.Success -> MaterialTheme.colorScheme.onPrimaryContainer
-        is ConnectionResult.Failure -> MaterialTheme.colorScheme.onErrorContainer
+        is ConnectionResult.Success -> MaterialTheme.colors.primary
+        is ConnectionResult.Failure -> MaterialTheme.colors.error
     }
     val text = when (result) {
         is ConnectionResult.Success -> {
@@ -174,13 +169,15 @@ private fun ConnectionResultCard(result: ConnectionResult, connectionFailed: Str
     }
 
     Card(
-        colors = CardDefaults.cardColors(containerColor = containerColor, contentColor = contentColor),
-        shape = RoundedCornerShape(20.dp),
+        backgroundColor = containerColor,
+        contentColor = contentColor,
+        shape = MaterialTheme.shapes.large,
+        elevation = 2.dp,
     ) {
         Text(
             text = text,
             modifier = Modifier.padding(16.dp),
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.body2,
         )
     }
 }

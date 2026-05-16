@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.session
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,19 +13,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ElevatedFilterChip
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material.Button
+import androidx.compose.material.Card
+import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.FilterChip
+import androidx.compose.material.MaterialTheme
+import androidx.compose.material.ModalBottomSheetLayout
+import androidx.compose.material.ModalBottomSheetValue
+import androidx.compose.material.OutlinedTextField
+import androidx.compose.material.Scaffold
+import androidx.compose.material.Text
+import androidx.compose.material.TextButton
+import androidx.compose.material.TopAppBar
+import androidx.compose.material.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -58,7 +59,17 @@ private data class ChatMessage(
 
 private enum class ChatRole { User, Assistant, System, Tool }
 
-@OptIn(ExperimentalMaterial3Api::class)
+private sealed interface SheetContent {
+    data object None : SheetContent
+    data object Navi : SheetContent
+    data object Diff : SheetContent
+    data class Permission(val event: OpenCodeStreamEvent.Permission) : SheetContent
+    data object AddProvider : SheetContent
+    data object AddModel : SheetContent
+    data object LoginProvider : SheetContent
+}
+
+@OptIn(ExperimentalMaterialApi::class)
 @Composable
 fun SessionScreen(
     connection: ServerConnection,
@@ -71,17 +82,18 @@ fun SessionScreen(
     var sessionId by remember { mutableStateOf<String?>(activeSession.id) }
     var input by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
-    var showNavi by remember { mutableStateOf(false) }
-    var showAddProvider by remember { mutableStateOf(false) }
-    var showAddModel by remember { mutableStateOf(false) }
-    var showLoginProvider by remember { mutableStateOf(false) }
+    var sheetContent by remember { mutableStateOf<SheetContent>(SheetContent.None) }
     var commands by remember { mutableStateOf<List<OpenCodeCommand>>(emptyList()) }
     var models by remember { mutableStateOf<List<ModelOption>>(emptyList()) }
     var selectedModel by remember { mutableStateOf<ModelOption?>(null) }
     var streamActive by remember { mutableStateOf(false) }
-    var showDiff by remember { mutableStateOf(false) }
     var diffFiles by remember { mutableStateOf<List<DiffFile>>(emptyList()) }
     var pendingPermission by remember { mutableStateOf<OpenCodeStreamEvent.Permission?>(null) }
+
+    val sheetState = rememberModalBottomSheetState(
+        initialValue = ModalBottomSheetValue.Hidden,
+        skipHalfExpanded = true,
+    )
 
     LaunchedEffect(connection, activeSession.id) {
         busy = true
@@ -135,233 +147,248 @@ fun SessionScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(activeSession.title?.ifBlank { stringResource(R.string.session_title) } ?: stringResource(R.string.session_title))
-                        Text(
-                            text = selectedModel?.label ?: activeSession.directory ?: stringResource(R.string.model_default),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                },
-                navigationIcon = {
-                    TextButton(onClick = onBack) { Text(stringResource(R.string.back_button)) }
-                },
-                actions = {
-                    TextButton(onClick = { showNavi = true }) {
-                        Text(stringResource(R.string.navi_title))
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-        ) {
-            LazyColumn(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(messages) { message ->
-                    MessageCard(message)
-                }
+    // Show sheet when pendingPermission is set
+    LaunchedEffect(pendingPermission) {
+        if (pendingPermission != null) {
+            sheetContent = SheetContent.Permission(pendingPermission!!)
+        }
+    }
+
+    // Animate sheet open/close based on sheetContent
+    LaunchedEffect(sheetContent) {
+        if (sheetContent == SheetContent.None) {
+            sheetState.hide()
+        } else {
+            sheetState.show()
+        }
+    }
+
+    // Sync back when user swipes to dismiss
+    LaunchedEffect(sheetState.isVisible) {
+        if (!sheetState.isVisible && sheetContent != SheetContent.None) {
+            if (sheetContent is SheetContent.Permission) {
+                pendingPermission = null
             }
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Button(
-                    onClick = { showNavi = true },
-                    shape = RoundedCornerShape(18.dp),
-                ) {
-                    Text(stringResource(R.string.navi_button))
-                }
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = {
-                        input = it
-                        if (it == "/") showNavi = true
+            sheetContent = SheetContent.None
+        }
+    }
+
+    ModalBottomSheetLayout(
+        sheetState = sheetState,
+        sheetShape = androidx.compose.foundation.shape.RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
+        sheetBackgroundColor = MaterialTheme.colors.surface,
+        sheetContent = {
+            when (val content = sheetContent) {
+                SheetContent.None -> Box(Modifier.height(1.dp))
+                SheetContent.Navi -> NaviSheetContent(
+                    commands = commands,
+                    models = models,
+                    selectedModel = selectedModel,
+                    onTemplate = { template ->
+                        input = template
+                        sheetContent = SheetContent.None
                     },
-                    modifier = Modifier.weight(1f),
-                    label = { Text(stringResource(R.string.message_input_label)) },
-                    minLines = 1,
-                    maxLines = 4,
-                )
-                Button(
-                    enabled = !busy && sessionId != null && input.isNotBlank(),
-                    onClick = {
-                        val text = input.trim()
-                        val activeSessionId = sessionId ?: return@Button
-                        input = ""
-                        messages += ChatMessage(ChatRole.User, text)
+                    onCommand = { command ->
+                        val activeSessionId = sessionId ?: return@NaviSheetContent
+                        sheetContent = SheetContent.None
                         busy = true
+                        messages += ChatMessage(ChatRole.User, "/${command.name}")
                         scope.launch {
-                            runCatching { agentClient.promptAsync(connection.serverUrl, connection.token, activeSessionId, text, selectedModel, activeSession.directory) }
-                                .onFailure {
-                                    runCatching { agentClient.sendMessage(connection.serverUrl, connection.token, activeSessionId, text, selectedModel, activeSession.directory) }
-                                        .onSuccess { messages += ChatMessage(ChatRole.Assistant, it) }
-                                        .onFailure { error -> messages += ChatMessage(ChatRole.System, error.message ?: "Send failed") }
-                                    busy = false
-                                }
+                            runCatching {
+                                agentClient.executeCommand(
+                                    serverUrl = connection.serverUrl,
+                                    token = connection.token,
+                                    sessionId = activeSessionId,
+                                    command = command.name,
+                                    arguments = "",
+                                    model = selectedModel,
+                                    directory = activeSession.directory,
+                                )
+                            }.onSuccess { messages += ChatMessage(ChatRole.Assistant, it) }
+                                .onFailure { messages += ChatMessage(ChatRole.System, it.message ?: "Command failed") }
+                            busy = false
                         }
                     },
+                    onModel = {
+                        selectedModel = it
+                        messages += ChatMessage(ChatRole.System, "${it.providerName} / ${it.modelName}")
+                        sheetContent = SheetContent.None
+                    },
+                    onDiff = {
+                        val activeSessionId = sessionId ?: return@NaviSheetContent
+                        scope.launch {
+                            runCatching { agentClient.getSessionDiff(connection.serverUrl, connection.token, activeSessionId, activeSession.directory) }
+                                .onSuccess {
+                                    diffFiles = it
+                                    sheetContent = SheetContent.Diff
+                                }
+                                .onFailure { messages += ChatMessage(ChatRole.System, it.message ?: "Diff failed") }
+                        }
+                    },
+                    onAddProvider = { sheetContent = SheetContent.AddProvider },
+                    onAddModel = { sheetContent = SheetContent.AddModel },
+                    onLoginProvider = { sheetContent = SheetContent.LoginProvider },
+                )
+                SheetContent.Diff -> DiffSheetContent(
+                    diffFiles = diffFiles,
+                )
+                is SheetContent.Permission -> PermissionSheetContent(
+                    permission = content.event,
+                    onReply = { reply ->
+                        scope.launch {
+                            runCatching { agentClient.replyPermission(connection.serverUrl, connection.token, content.event.requestId, reply) }
+                                .onSuccess { messages += ChatMessage(ChatRole.System, "${content.event.title}: ${reply.wireValue}") }
+                                .onFailure { messages += ChatMessage(ChatRole.System, it.message ?: "Permission reply failed") }
+                            pendingPermission = null
+                            sheetContent = SheetContent.None
+                        }
+                    },
+                )
+                SheetContent.AddProvider -> AddProviderSheetContent(
+                    onSubmit = { id, baseURL, apiKey, modelId, modelName ->
+                        sheetContent = SheetContent.None
+                        scope.launch {
+                            val modelMap = if (modelId.isNotBlank() && modelName.isNotBlank()) mapOf(modelId to modelName) else emptyMap()
+                            runCatching { agentClient.addProvider(connection.serverUrl, connection.token, id, baseURL, apiKey, modelMap) }
+                                .onSuccess {
+                                    messages += ChatMessage(ChatRole.System, stringResource_providerSuccess)
+                                    reloadModels(agentClient, connection, models = { models = it }, selected = { selectedModel = it })
+                                }
+                                .onFailure { messages += ChatMessage(ChatRole.System, it.message ?: "Failed") }
+                        }
+                    },
+                )
+                SheetContent.AddModel -> AddModelSheetContent(
+                    onSubmit = { providerId, modelId, modelName ->
+                        sheetContent = SheetContent.None
+                        scope.launch {
+                            runCatching { agentClient.addModel(connection.serverUrl, connection.token, providerId, modelId, modelName) }
+                                .onSuccess {
+                                    messages += ChatMessage(ChatRole.System, stringResource_providerSuccess)
+                                    reloadModels(agentClient, connection, models = { models = it }, selected = { selectedModel = it })
+                                }
+                                .onFailure { messages += ChatMessage(ChatRole.System, it.message ?: "Failed") }
+                        }
+                    },
+                )
+                SheetContent.LoginProvider -> LoginProviderSheetContent(
+                    onSubmit = { providerId, apiKey ->
+                        sheetContent = SheetContent.None
+                        scope.launch {
+                            runCatching { agentClient.loginProvider(connection.serverUrl, connection.token, providerId, apiKey) }
+                                .onSuccess {
+                                    messages += ChatMessage(ChatRole.System, stringResource_providerSuccess)
+                                    reloadModels(agentClient, connection, models = { models = it }, selected = { selectedModel = it })
+                                }
+                                .onFailure { messages += ChatMessage(ChatRole.System, it.message ?: "Failed") }
+                        }
+                    },
+                )
+            }
+        },
+    ) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text(activeSession.title?.ifBlank { stringResource(R.string.session_title) } ?: stringResource(R.string.session_title))
+                            Text(
+                                text = selectedModel?.label ?: activeSession.directory ?: stringResource(R.string.model_default),
+                                style = MaterialTheme.typography.overline,
+                                color = MaterialTheme.colors.onSurface.copy(alpha = 0.7f),
+                            )
+                        }
+                    },
+                    navigationIcon = {
+                        TextButton(onClick = onBack) { Text(stringResource(R.string.back_button)) }
+                    },
+                    actions = {
+                        TextButton(onClick = { sheetContent = SheetContent.Navi }) {
+                            Text(stringResource(R.string.navi_title))
+                        }
+                    },
+                )
+            },
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp),
+            ) {
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Text(
-                        when {
-                            busy -> stringResource(R.string.sending_button)
-                            streamActive -> stringResource(R.string.send_button)
-                            else -> stringResource(R.string.send_button)
+                    items(messages) { message ->
+                        MessageCard(message)
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Button(
+                        onClick = { sheetContent = SheetContent.Navi },
+                        shape = MaterialTheme.shapes.medium,
+                    ) {
+                        Text(stringResource(R.string.navi_button))
+                    }
+                    OutlinedTextField(
+                        value = input,
+                        onValueChange = {
+                            input = it
+                            if (it == "/") sheetContent = SheetContent.Navi
                         },
+                        modifier = Modifier.weight(1f),
+                        label = { Text(stringResource(R.string.message_input_label)) },
+                        minLines = 1,
+                        maxLines = 4,
                     )
+                    Button(
+                        enabled = !busy && sessionId != null && input.isNotBlank(),
+                        onClick = {
+                            val text = input.trim()
+                            val activeSessionId = sessionId ?: return@Button
+                            input = ""
+                            messages += ChatMessage(ChatRole.User, text)
+                            busy = true
+                            scope.launch {
+                                runCatching { agentClient.promptAsync(connection.serverUrl, connection.token, activeSessionId, text, selectedModel, activeSession.directory) }
+                                    .onFailure {
+                                        runCatching { agentClient.sendMessage(connection.serverUrl, connection.token, activeSessionId, text, selectedModel, activeSession.directory) }
+                                            .onSuccess { messages += ChatMessage(ChatRole.Assistant, it) }
+                                            .onFailure { error -> messages += ChatMessage(ChatRole.System, error.message ?: "Send failed") }
+                                        busy = false
+                                    }
+                            }
+                        },
+                    ) {
+                        Text(
+                            when {
+                                busy -> stringResource(R.string.sending_button)
+                                streamActive -> stringResource(R.string.send_button)
+                                else -> stringResource(R.string.send_button)
+                            },
+                        )
+                    }
                 }
             }
         }
     }
-
-    if (showNavi) {
-        NaviSheet(
-            commands = commands,
-            models = models,
-            selectedModel = selectedModel,
-            onDismiss = { showNavi = false },
-            onTemplate = { template ->
-                input = template
-                showNavi = false
-            },
-            onCommand = { command ->
-                val activeSessionId = sessionId ?: return@NaviSheet
-                showNavi = false
-                busy = true
-                messages += ChatMessage(ChatRole.User, "/${command.name}")
-                scope.launch {
-                    runCatching {
-                        agentClient.executeCommand(
-                            serverUrl = connection.serverUrl,
-                            token = connection.token,
-                            sessionId = activeSessionId,
-                            command = command.name,
-                            arguments = "",
-                            model = selectedModel,
-                            directory = activeSession.directory,
-                        )
-                    }.onSuccess { messages += ChatMessage(ChatRole.Assistant, it) }
-                        .onFailure { messages += ChatMessage(ChatRole.System, it.message ?: "Command failed") }
-                    busy = false
-                }
-            },
-            onModel = {
-                selectedModel = it
-                messages += ChatMessage(ChatRole.System, "${it.providerName} / ${it.modelName}")
-                showNavi = false
-            },
-            onDiff = {
-                val activeSessionId = sessionId ?: return@NaviSheet
-                showNavi = false
-                scope.launch {
-                    runCatching { agentClient.getSessionDiff(connection.serverUrl, connection.token, activeSessionId, activeSession.directory) }
-                        .onSuccess {
-                            diffFiles = it
-                            showDiff = true
-                        }
-                        .onFailure { messages += ChatMessage(ChatRole.System, it.message ?: "Diff failed") }
-                }
-            },
-            onAddProvider = { showNavi = false; showAddProvider = true },
-            onAddModel = { showNavi = false; showAddModel = true },
-            onLoginProvider = { showNavi = false; showLoginProvider = true },
-        )
-    }
-
-    if (showDiff) {
-        DiffSheet(diffFiles = diffFiles, onDismiss = { showDiff = false })
-    }
-
-    pendingPermission?.let { permission ->
-        PermissionSheet(
-            permission = permission,
-            onDismiss = { pendingPermission = null },
-            onReply = { reply ->
-                scope.launch {
-                    runCatching { agentClient.replyPermission(connection.serverUrl, connection.token, permission.requestId, reply) }
-                        .onSuccess { messages += ChatMessage(ChatRole.System, "${permission.title}: ${reply.wireValue}") }
-                        .onFailure { messages += ChatMessage(ChatRole.System, it.message ?: "Permission reply failed") }
-                    pendingPermission = null
-                }
-            },
-        )
-    }
-
-    if (showAddProvider) {
-        AddProviderSheet(
-            onDismiss = { showAddProvider = false },
-            onSubmit = { id, baseURL, apiKey, modelId, modelName ->
-                showAddProvider = false
-                scope.launch {
-                    val modelMap = if (modelId.isNotBlank() && modelName.isNotBlank()) mapOf(modelId to modelName) else emptyMap()
-                    runCatching { agentClient.addProvider(connection.serverUrl, connection.token, id, baseURL, apiKey, modelMap) }
-                        .onSuccess {
-                            messages += ChatMessage(ChatRole.System, stringResource_providerSuccess)
-                            reloadModels(agentClient, connection, models = { models = it }, selected = { selectedModel = it })
-                        }
-                        .onFailure { messages += ChatMessage(ChatRole.System, it.message ?: "Failed") }
-                }
-            },
-        )
-    }
-
-    if (showAddModel) {
-        AddModelSheet(
-            onDismiss = { showAddModel = false },
-            onSubmit = { providerId, modelId, modelName ->
-                showAddModel = false
-                scope.launch {
-                    runCatching { agentClient.addModel(connection.serverUrl, connection.token, providerId, modelId, modelName) }
-                        .onSuccess {
-                            messages += ChatMessage(ChatRole.System, stringResource_providerSuccess)
-                            reloadModels(agentClient, connection, models = { models = it }, selected = { selectedModel = it })
-                        }
-                        .onFailure { messages += ChatMessage(ChatRole.System, it.message ?: "Failed") }
-                }
-            },
-        )
-    }
-
-    if (showLoginProvider) {
-        LoginProviderSheet(
-            onDismiss = { showLoginProvider = false },
-            onSubmit = { providerId, apiKey ->
-                showLoginProvider = false
-                scope.launch {
-                    runCatching { agentClient.loginProvider(connection.serverUrl, connection.token, providerId, apiKey) }
-                        .onSuccess {
-                            messages += ChatMessage(ChatRole.System, stringResource_providerSuccess)
-                            reloadModels(agentClient, connection, models = { models = it }, selected = { selectedModel = it })
-                        }
-                        .onFailure { messages += ChatMessage(ChatRole.System, it.message ?: "Failed") }
-                }
-            },
-        )
-    }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterialApi::class)
 @Composable
-private fun NaviSheet(
+private fun NaviSheetContent(
     commands: List<OpenCodeCommand>,
     models: List<ModelOption>,
     selectedModel: ModelOption?,
-    onDismiss: () -> Unit,
     onTemplate: (String) -> Unit,
     onCommand: (OpenCodeCommand) -> Unit,
     onModel: (ModelOption) -> Unit,
@@ -372,152 +399,133 @@ private fun NaviSheet(
 ) {
     val templates = promptTemplates()
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 36.dp, topEnd = 36.dp),
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            item {
-                Text(
-                    text = stringResource(R.string.navi_title),
-                    style = MaterialTheme.typography.displaySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = stringResource(R.string.navi_subtitle),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            item { NaviSectionTitle(stringResource(R.string.navi_section_templates)) }
-            item {
-                NaviActionCard(
-                    title = stringResource(R.string.navi_diff_title),
-                    description = stringResource(R.string.navi_diff_description),
-                    onClick = onDiff,
-                )
-            }
-            items(templates) { item ->
-                NaviActionCard(title = item.title, description = item.description) { onTemplate(item.prompt) }
-            }
-            if (commands.isNotEmpty()) {
-                item { NaviSectionTitle(stringResource(R.string.navi_section_opencode)) }
-                items(commands.take(12)) { command ->
-                    NaviActionCard(
-                        title = "/${command.name}",
-                        description = command.description ?: stringResource(R.string.navi_native_command),
-                    ) { onCommand(command) }
-                }
-            }
-            if (models.isNotEmpty()) {
-                item { NaviSectionTitle(stringResource(R.string.navi_section_models)) }
-                items(models.take(48)) { model ->
-                    ElevatedFilterChip(
-                        selected = selectedModel?.providerId == model.providerId && selectedModel.modelId == model.modelId,
-                        onClick = { onModel(model) },
-                        label = { Text(model.label) },
-                        modifier = Modifier.widthIn(max = 520.dp),
-                    )
-                }
-            }
-            item { NaviSectionTitle(stringResource(R.string.navi_section_providers)) }
-            item {
-                NaviActionCard(
-                    title = stringResource(R.string.navi_add_provider_title),
-                    description = stringResource(R.string.navi_add_provider_description),
-                    onClick = onAddProvider,
-                )
-            }
-            item {
-                NaviActionCard(
-                    title = stringResource(R.string.navi_add_model_title),
-                    description = stringResource(R.string.navi_add_model_description),
-                    onClick = onAddModel,
-                )
-            }
-            item {
-                NaviActionCard(
-                    title = stringResource(R.string.navi_login_provider_title),
-                    description = stringResource(R.string.navi_login_provider_description),
-                    onClick = onLoginProvider,
-                )
-            }
-            item { Spacer(modifier = Modifier.height(20.dp)) }
+        item {
+            Text(
+                text = stringResource(R.string.navi_title),
+                style = MaterialTheme.typography.h5,
+                color = MaterialTheme.colors.primary,
+            )
+            Text(
+                text = stringResource(R.string.navi_subtitle),
+                style = MaterialTheme.typography.body2,
+                color = MaterialTheme.colors.onSurface.copy(alpha = 0.7f),
+            )
         }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun DiffSheet(diffFiles: List<DiffFile>, onDismiss: () -> Unit) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 36.dp, topEnd = 36.dp),
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-    ) {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            item {
-                Text(text = stringResource(R.string.diff_title), style = MaterialTheme.typography.headlineSmall)
-                Text(
-                    text = if (diffFiles.isEmpty()) stringResource(R.string.diff_empty) else stringResource(R.string.diff_count, diffFiles.size),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+        item { NaviSectionTitle(stringResource(R.string.navi_section_templates)) }
+        item {
+            NaviActionCard(
+                title = stringResource(R.string.navi_diff_title),
+                description = stringResource(R.string.navi_diff_description),
+                onClick = onDiff,
+            )
+        }
+        items(templates) { item ->
+            NaviActionCard(title = item.title, description = item.description) { onTemplate(item.prompt) }
+        }
+        if (commands.isNotEmpty()) {
+            item { NaviSectionTitle(stringResource(R.string.navi_section_opencode)) }
+            items(commands.take(12)) { command ->
+                NaviActionCard(
+                    title = "/${command.name}",
+                    description = command.description ?: stringResource(R.string.navi_native_command),
+                ) { onCommand(command) }
             }
-            items(diffFiles) { file ->
-                Card(
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        }
+        if (models.isNotEmpty()) {
+            item { NaviSectionTitle(stringResource(R.string.navi_section_models)) }
+            items(models.take(48)) { model ->
+                FilterChip(
+                    selected = selectedModel?.providerId == model.providerId && selectedModel.modelId == model.modelId,
+                    onClick = { onModel(model) },
+                    modifier = Modifier.widthIn(max = 520.dp),
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(text = file.path, style = MaterialTheme.typography.titleSmall)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        MarkdownText(text = "```json\n${file.text}\n```")
-                    }
+                    Text(model.label)
                 }
             }
-            item { Spacer(modifier = Modifier.height(20.dp)) }
         }
+        item { NaviSectionTitle(stringResource(R.string.navi_section_providers)) }
+        item {
+            NaviActionCard(
+                title = stringResource(R.string.navi_add_provider_title),
+                description = stringResource(R.string.navi_add_provider_description),
+                onClick = onAddProvider,
+            )
+        }
+        item {
+            NaviActionCard(
+                title = stringResource(R.string.navi_add_model_title),
+                description = stringResource(R.string.navi_add_model_description),
+                onClick = onAddModel,
+            )
+        }
+        item {
+            NaviActionCard(
+                title = stringResource(R.string.navi_login_provider_title),
+                description = stringResource(R.string.navi_login_provider_description),
+                onClick = onLoginProvider,
+            )
+        }
+        item { Spacer(modifier = Modifier.height(20.dp)) }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PermissionSheet(
+private fun DiffSheetContent(diffFiles: List<DiffFile>) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        item {
+            Text(text = stringResource(R.string.diff_title), style = MaterialTheme.typography.h6)
+            Text(
+                text = if (diffFiles.isEmpty()) stringResource(R.string.diff_empty) else stringResource(R.string.diff_count, diffFiles.size),
+                style = MaterialTheme.typography.body2,
+                color = MaterialTheme.colors.onSurface.copy(alpha = 0.7f),
+            )
+        }
+        items(diffFiles) { file ->
+            Card(
+                shape = MaterialTheme.shapes.large,
+                backgroundColor = MaterialTheme.colors.onSurface.copy(alpha = 0.08f),
+                elevation = 2.dp,
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(text = file.path, style = MaterialTheme.typography.overline)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    MarkdownText(text = "```json\n${file.text}\n```")
+                }
+            }
+        }
+        item { Spacer(modifier = Modifier.height(20.dp)) }
+    }
+}
+
+@Composable
+private fun PermissionSheetContent(
     permission: OpenCodeStreamEvent.Permission,
-    onDismiss: () -> Unit,
     onReply: (PermissionReply) -> Unit,
 ) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 36.dp, topEnd = 36.dp),
-        containerColor = MaterialTheme.colorScheme.errorContainer,
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Text(text = stringResource(R.string.permission_title), style = MaterialTheme.typography.headlineSmall)
-            Text(text = permission.title, style = MaterialTheme.typography.titleMedium)
-            Text(text = permission.details, style = MaterialTheme.typography.bodyMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { onReply(PermissionReply.Reject) }) { Text(stringResource(R.string.permission_reject)) }
-                Button(onClick = { onReply(PermissionReply.Once) }) { Text(stringResource(R.string.permission_once)) }
-                Button(onClick = { onReply(PermissionReply.Always) }) { Text(stringResource(R.string.permission_always)) }
-            }
+        Text(text = stringResource(R.string.permission_title), style = MaterialTheme.typography.h6)
+        Text(text = permission.title, style = MaterialTheme.typography.subtitle2)
+        Text(text = permission.details, style = MaterialTheme.typography.body2)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { onReply(PermissionReply.Reject) }) { Text(stringResource(R.string.permission_reject)) }
+            Button(onClick = { onReply(PermissionReply.Once) }) { Text(stringResource(R.string.permission_once)) }
+            Button(onClick = { onReply(PermissionReply.Always) }) { Text(stringResource(R.string.permission_always)) }
         }
     }
 }
@@ -526,8 +534,8 @@ private fun PermissionSheet(
 private fun NaviSectionTitle(text: String) {
     Text(
         text = text,
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.subtitle2,
+        color = MaterialTheme.colors.onSurface.copy(alpha = 0.7f),
         modifier = Modifier.padding(top = 8.dp),
     )
 }
@@ -535,18 +543,20 @@ private fun NaviSectionTitle(text: String) {
 @Composable
 private fun NaviActionCard(title: String, description: String, onClick: () -> Unit) {
     Card(
-        onClick = onClick,
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        backgroundColor = MaterialTheme.colors.onSurface.copy(alpha = 0.08f),
+        shape = MaterialTheme.shapes.large,
+        elevation = 2.dp,
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
-            Text(text = title, style = MaterialTheme.typography.titleMedium)
+            Text(text = title, style = MaterialTheme.typography.subtitle2)
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = description,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.body2,
+                color = MaterialTheme.colors.onSurface.copy(alpha = 0.7f),
             )
         }
     }
@@ -584,11 +594,11 @@ private fun promptTemplates() = listOf(
 
 @Composable
 private fun MessageCard(message: ChatMessage) {
-    val colors = when (message.role) {
-        ChatRole.User -> CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-        ChatRole.Assistant -> CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
-        ChatRole.System -> CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-        ChatRole.Tool -> CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+    val containerColor = when (message.role) {
+        ChatRole.User -> MaterialTheme.colors.primary.copy(alpha = 0.12f)
+        ChatRole.Assistant -> MaterialTheme.colors.onSurface.copy(alpha = 0.08f)
+        ChatRole.System -> MaterialTheme.colors.secondary.copy(alpha = 0.12f)
+        ChatRole.Tool -> MaterialTheme.colors.secondary.copy(alpha = 0.08f)
     }
     val title = when (message.role) {
         ChatRole.User -> stringResource(R.string.role_user)
@@ -597,17 +607,18 @@ private fun MessageCard(message: ChatMessage) {
         ChatRole.Tool -> stringResource(R.string.role_tool)
     }
     Card(
-        colors = colors,
-        shape = RoundedCornerShape(22.dp),
+        backgroundColor = containerColor,
+        shape = MaterialTheme.shapes.large,
+        elevation = 2.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = title, style = MaterialTheme.typography.labelLarge)
+            Text(text = title, style = MaterialTheme.typography.button)
             Spacer(modifier = Modifier.height(6.dp))
             if (message.role == ChatRole.Assistant) {
                 MarkdownText(text = message.text)
             } else {
-                Text(text = message.text, style = MaterialTheme.typography.bodyMedium)
+                Text(text = message.text, style = MaterialTheme.typography.body2)
             }
         }
     }
@@ -655,88 +666,67 @@ private suspend fun reloadModels(
         }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddProviderSheet(onDismiss: () -> Unit, onSubmit: (String, String, String, String, String) -> Unit) {
+private fun AddProviderSheetContent(onSubmit: (String, String, String, String, String) -> Unit) {
     var id by remember { mutableStateOf("") }
     var baseURL by remember { mutableStateOf("") }
     var apiKey by remember { mutableStateOf("") }
     var modelId by remember { mutableStateOf("") }
     var modelName by remember { mutableStateOf("") }
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 36.dp, topEnd = 36.dp),
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(stringResource(R.string.navi_add_provider_title), style = MaterialTheme.typography.headlineSmall)
-            OutlinedTextField(value = id, onValueChange = { id = it }, label = { Text(stringResource(R.string.provider_id_label)) }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(value = baseURL, onValueChange = { baseURL = it }, label = { Text(stringResource(R.string.provider_base_url_label)) }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(value = apiKey, onValueChange = { apiKey = it }, label = { Text(stringResource(R.string.provider_api_key_label)) }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(value = modelId, onValueChange = { modelId = it }, label = { Text(stringResource(R.string.provider_model_id_label)) }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(value = modelName, onValueChange = { modelName = it }, label = { Text(stringResource(R.string.provider_model_name_label)) }, modifier = Modifier.fillMaxWidth())
-            Button(
-                enabled = id.isNotBlank() && baseURL.isNotBlank() && apiKey.isNotBlank(),
-                onClick = { onSubmit(id.trim(), baseURL.trim(), apiKey.trim(), modelId.trim(), modelName.trim()) },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text(stringResource(R.string.provider_submit)) }
-        }
+        Text(stringResource(R.string.navi_add_provider_title), style = MaterialTheme.typography.h6)
+        OutlinedTextField(value = id, onValueChange = { id = it }, label = { Text(stringResource(R.string.provider_id_label)) }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = baseURL, onValueChange = { baseURL = it }, label = { Text(stringResource(R.string.provider_base_url_label)) }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = apiKey, onValueChange = { apiKey = it }, label = { Text(stringResource(R.string.provider_api_key_label)) }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = modelId, onValueChange = { modelId = it }, label = { Text(stringResource(R.string.provider_model_id_label)) }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = modelName, onValueChange = { modelName = it }, label = { Text(stringResource(R.string.provider_model_name_label)) }, modifier = Modifier.fillMaxWidth())
+        Button(
+            enabled = id.isNotBlank() && baseURL.isNotBlank() && apiKey.isNotBlank(),
+            onClick = { onSubmit(id.trim(), baseURL.trim(), apiKey.trim(), modelId.trim(), modelName.trim()) },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text(stringResource(R.string.provider_submit)) }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddModelSheet(onDismiss: () -> Unit, onSubmit: (String, String, String) -> Unit) {
+private fun AddModelSheetContent(onSubmit: (String, String, String) -> Unit) {
     var providerId by remember { mutableStateOf("") }
     var modelId by remember { mutableStateOf("") }
     var modelName by remember { mutableStateOf("") }
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 36.dp, topEnd = 36.dp),
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(stringResource(R.string.navi_add_model_title), style = MaterialTheme.typography.headlineSmall)
-            OutlinedTextField(value = providerId, onValueChange = { providerId = it }, label = { Text(stringResource(R.string.provider_id_label)) }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(value = modelId, onValueChange = { modelId = it }, label = { Text(stringResource(R.string.provider_model_id_label)) }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(value = modelName, onValueChange = { modelName = it }, label = { Text(stringResource(R.string.provider_model_name_label)) }, modifier = Modifier.fillMaxWidth())
-            Button(
-                enabled = providerId.isNotBlank() && modelId.isNotBlank() && modelName.isNotBlank(),
-                onClick = { onSubmit(providerId.trim(), modelId.trim(), modelName.trim()) },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text(stringResource(R.string.provider_submit)) }
-        }
+        Text(stringResource(R.string.navi_add_model_title), style = MaterialTheme.typography.h6)
+        OutlinedTextField(value = providerId, onValueChange = { providerId = it }, label = { Text(stringResource(R.string.provider_id_label)) }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = modelId, onValueChange = { modelId = it }, label = { Text(stringResource(R.string.provider_model_id_label)) }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = modelName, onValueChange = { modelName = it }, label = { Text(stringResource(R.string.provider_model_name_label)) }, modifier = Modifier.fillMaxWidth())
+        Button(
+            enabled = providerId.isNotBlank() && modelId.isNotBlank() && modelName.isNotBlank(),
+            onClick = { onSubmit(providerId.trim(), modelId.trim(), modelName.trim()) },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text(stringResource(R.string.provider_submit)) }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun LoginProviderSheet(onDismiss: () -> Unit, onSubmit: (String, String) -> Unit) {
+private fun LoginProviderSheetContent(onSubmit: (String, String) -> Unit) {
     var providerId by remember { mutableStateOf("") }
     var apiKey by remember { mutableStateOf("") }
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 36.dp, topEnd = 36.dp),
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(stringResource(R.string.navi_login_provider_title), style = MaterialTheme.typography.headlineSmall)
-            OutlinedTextField(value = providerId, onValueChange = { providerId = it }, label = { Text(stringResource(R.string.provider_id_label)) }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(value = apiKey, onValueChange = { apiKey = it }, label = { Text(stringResource(R.string.provider_api_key_label)) }, modifier = Modifier.fillMaxWidth())
-            Button(
-                enabled = providerId.isNotBlank() && apiKey.isNotBlank(),
-                onClick = { onSubmit(providerId.trim(), apiKey.trim()) },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text(stringResource(R.string.provider_submit)) }
-        }
+        Text(stringResource(R.string.navi_login_provider_title), style = MaterialTheme.typography.h6)
+        OutlinedTextField(value = providerId, onValueChange = { providerId = it }, label = { Text(stringResource(R.string.provider_id_label)) }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = apiKey, onValueChange = { apiKey = it }, label = { Text(stringResource(R.string.provider_api_key_label)) }, modifier = Modifier.fillMaxWidth())
+        Button(
+            enabled = providerId.isNotBlank() && apiKey.isNotBlank(),
+            onClick = { onSubmit(providerId.trim(), apiKey.trim()) },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text(stringResource(R.string.provider_submit)) }
     }
 }

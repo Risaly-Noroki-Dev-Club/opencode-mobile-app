@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.project
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,17 +11,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material.Button
+import androidx.compose.material.Card
+import androidx.compose.material.LinearProgressIndicator
+import androidx.compose.material.MaterialTheme
+import androidx.compose.material.Scaffold
+import androidx.compose.material.Text
+import androidx.compose.material.TextButton
+import androidx.compose.material.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -40,7 +38,6 @@ import kotlinx.coroutines.launch
 import java.text.DateFormat
 import java.util.Date
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProjectListScreen(
     connection: ServerConnection,
@@ -104,11 +101,12 @@ fun ProjectListScreen(
 @Composable
 private fun HealthCard(health: AgentHealth) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-        shape = RoundedCornerShape(24.dp),
+        backgroundColor = MaterialTheme.colors.secondary.copy(alpha = 0.12f),
+        shape = MaterialTheme.shapes.large,
+        elevation = 2.dp,
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(text = stringResource(R.string.agent_status_title), style = MaterialTheme.typography.titleMedium)
+            Text(text = stringResource(R.string.agent_status_title), style = MaterialTheme.typography.subtitle1)
             Text(text = stringResource(R.string.agent_status_projects, health.projectCount, health.projectSource ?: "unknown"))
             Text(
                 text = if (health.opencodeHealthy) {
@@ -125,32 +123,42 @@ private fun HealthCard(health: AgentHealth) {
 @Composable
 private fun ProjectCard(project: AgentProject, onClick: () -> Unit) {
     Card(
-        onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-        shape = RoundedCornerShape(26.dp),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        backgroundColor = MaterialTheme.colors.onSurface.copy(alpha = 0.08f),
+        shape = MaterialTheme.shapes.large,
+        elevation = 2.dp,
     ) {
         Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(text = project.name, style = MaterialTheme.typography.titleLarge)
-                Text(text = project.vcs, style = MaterialTheme.typography.labelMedium)
+                Text(text = project.name, style = MaterialTheme.typography.subtitle1)
+                Text(text = project.vcs, style = MaterialTheme.typography.caption)
             }
-            Text(text = project.worktree, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(text = formatTime(project.lastActive), style = MaterialTheme.typography.labelMedium)
+            Text(text = project.worktree, style = MaterialTheme.typography.body2, color = MaterialTheme.colors.onSurface.copy(alpha = 0.7f))
+            Text(text = formatTime(project.lastActive), style = MaterialTheme.typography.caption)
         }
     }
 }
 
 @Composable
 private fun ErrorCard(message: String) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer), shape = RoundedCornerShape(20.dp)) {
-        Text(text = message, modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onErrorContainer)
+    Card(
+        backgroundColor = MaterialTheme.colors.error.copy(alpha = 0.12f),
+        shape = MaterialTheme.shapes.large,
+        elevation = 2.dp,
+    ) {
+        Text(text = message, modifier = Modifier.padding(16.dp), color = MaterialTheme.colors.error)
     }
 }
 
 @Composable
 private fun EmptyCard(message: String) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh), shape = RoundedCornerShape(20.dp)) {
+    Card(
+        backgroundColor = MaterialTheme.colors.onSurface.copy(alpha = 0.08f),
+        shape = MaterialTheme.shapes.large,
+        elevation = 2.dp,
+    ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(text = message)
             Spacer(modifier = Modifier.height(8.dp))
