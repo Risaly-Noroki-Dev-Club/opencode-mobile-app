@@ -19,6 +19,7 @@
     <string name="role_user">你</string>
     <string name="role_assistant">OpenCode</string>
     <string name="role_system">系统</string>
+    <string name="role_tool">工具</string>
     <string name="model_default">默认模型</string>
     <string name="navi_title">navi</string>
     <string name="navi_button">navi</string>

@@ -42,7 +42,10 @@ import dev.opencode.mobile.data.AgentClient
 import dev.opencode.mobile.data.ModelOption
 import dev.opencode.mobile.data.OpenCodeMessage
 import dev.opencode.mobile.data.OpenCodeCommand
+import dev.opencode.mobile.data.OpenCodeStreamEvent
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class ChatConnection(
     val serverUrl: String,
@@ -54,7 +57,7 @@ private data class ChatMessage(
     val text: String,
 )
 
-private enum class ChatRole { User, Assistant, System }
+private enum class ChatRole { User, Assistant, System, Tool }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,6 +72,7 @@ fun SessionScreen(connection: ChatConnection) {
     var commands by remember { mutableStateOf<List<OpenCodeCommand>>(emptyList()) }
     var models by remember { mutableStateOf<List<ModelOption>>(emptyList()) }
     var selectedModel by remember { mutableStateOf<ModelOption?>(null) }
+    var streamActive by remember { mutableStateOf(false) }
 
     LaunchedEffect(connection) {
         busy = true
@@ -97,6 +101,30 @@ fun SessionScreen(connection: ChatConnection) {
                 selectedModel = availableModels.firstOrNull { it.providerId == "rakuraku" && it.modelId == "gpt-5.5" }
                     ?: availableModels.firstOrNull()
             }
+    }
+
+    LaunchedEffect(connection, sessionId) {
+        val activeSession = sessionId ?: return@LaunchedEffect
+        runCatching {
+            streamActive = true
+            agentClient.streamEvents(connection.serverUrl, connection.token) { event ->
+                if (event.sessionId != activeSession) return@streamEvents
+                scope.launch {
+                    withContext(Dispatchers.Main) {
+                        when (event) {
+                            is OpenCodeStreamEvent.TextDelta -> appendAssistantDelta(messages, event.delta)
+                            is OpenCodeStreamEvent.TextEnded -> finalizeAssistantText(messages, event.text)
+                            is OpenCodeStreamEvent.Tool -> messages += ChatMessage(ChatRole.Tool, event.title)
+                            is OpenCodeStreamEvent.Error -> messages += ChatMessage(ChatRole.System, event.message)
+                            is OpenCodeStreamEvent.Idle -> busy = false
+                        }
+                    }
+                }
+            }
+        }.onFailure {
+            streamActive = false
+            messages += ChatMessage(ChatRole.System, it.message ?: "Event stream failed")
+        }
     }
 
     Scaffold(
@@ -168,14 +196,23 @@ fun SessionScreen(connection: ChatConnection) {
                         messages += ChatMessage(ChatRole.User, text)
                         busy = true
                         scope.launch {
-                            runCatching { agentClient.sendMessage(connection.serverUrl, connection.token, activeSession, text, selectedModel) }
-                                .onSuccess { messages += ChatMessage(ChatRole.Assistant, it) }
-                                .onFailure { messages += ChatMessage(ChatRole.System, it.message ?: "Send failed") }
-                            busy = false
+                            runCatching { agentClient.promptAsync(connection.serverUrl, connection.token, activeSession, text, selectedModel) }
+                                .onFailure {
+                                    runCatching { agentClient.sendMessage(connection.serverUrl, connection.token, activeSession, text, selectedModel) }
+                                        .onSuccess { messages += ChatMessage(ChatRole.Assistant, it) }
+                                        .onFailure { error -> messages += ChatMessage(ChatRole.System, error.message ?: "Send failed") }
+                                    busy = false
+                                }
                         }
                     },
                 ) {
-                    Text(if (busy) stringResource(R.string.sending_button) else stringResource(R.string.send_button))
+                    Text(
+                        when {
+                            busy -> stringResource(R.string.sending_button)
+                            streamActive -> stringResource(R.string.send_button)
+                            else -> stringResource(R.string.send_button)
+                        },
+                    )
                 }
             }
         }
@@ -351,11 +388,13 @@ private fun MessageCard(message: ChatMessage) {
         ChatRole.User -> CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
         ChatRole.Assistant -> CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ChatRole.System -> CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+        ChatRole.Tool -> CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
     }
     val title = when (message.role) {
         ChatRole.User -> stringResource(R.string.role_user)
         ChatRole.Assistant -> stringResource(R.string.role_assistant)
         ChatRole.System -> stringResource(R.string.role_system)
+        ChatRole.Tool -> stringResource(R.string.role_tool)
     }
     Card(
         colors = colors,
@@ -371,6 +410,23 @@ private fun MessageCard(message: ChatMessage) {
                 Text(text = message.text, style = MaterialTheme.typography.bodyMedium)
             }
         }
+    }
+}
+
+private fun appendAssistantDelta(messages: MutableList<ChatMessage>, delta: String) {
+    val last = messages.lastOrNull()
+    if (last?.role == ChatRole.Assistant) {
+        messages[messages.lastIndex] = last.copy(text = last.text + delta)
+    } else {
+        messages += ChatMessage(ChatRole.Assistant, delta)
+    }
+}
+
+private fun finalizeAssistantText(messages: MutableList<ChatMessage>, text: String) {
+    if (text.isBlank()) return
+    val last = messages.lastOrNull()
+    if (last?.role == ChatRole.Assistant) {
+        messages[messages.lastIndex] = last.copy(text = text)
     }
 }
 

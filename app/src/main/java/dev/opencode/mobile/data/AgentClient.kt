@@ -14,6 +14,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.booleanOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
@@ -117,6 +118,62 @@ class AgentClient(
             ?: "Command sent: /$command"
     }
 
+    suspend fun promptAsync(
+        serverUrl: String,
+        token: String,
+        sessionId: String,
+        text: String,
+        model: ModelOption?,
+    ) = withContext(Dispatchers.IO) {
+        val body = buildJsonObject {
+            if (model != null) {
+                put("model", buildJsonObject {
+                    put("providerID", model.providerId)
+                    put("modelID", model.modelId)
+                })
+            }
+            put("parts", JsonArray(listOf(buildJsonObject {
+                put("type", "text")
+                put("text", text)
+            })))
+        }
+        postEmpty(
+            url = "${serverUrl.trim().trimEnd('/')}/opencode/session/$sessionId/prompt_async",
+            token = token,
+            body = json.encodeToString(body),
+        )
+    }
+
+    suspend fun streamEvents(
+        serverUrl: String,
+        token: String,
+        onEvent: (OpenCodeStreamEvent) -> Unit,
+    ) = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("${serverUrl.trim().trimEnd('/')}/opencode/event")
+            .header("Authorization", "Bearer $token")
+            .build()
+        httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("HTTP ${response.code}: ${response.body?.string().orEmpty()}")
+            val source = response.body?.source() ?: throw IOException("Missing event stream body")
+            var eventName: String? = null
+            val data = StringBuilder()
+            while (!source.exhausted()) {
+                val line = source.readUtf8Line() ?: break
+                when {
+                    line.startsWith("event:") -> eventName = line.removePrefix("event:").trim()
+                    line.startsWith("data:") -> data.append(line.removePrefix("data:").trim())
+                    line.isBlank() -> {
+                        val payload = data.toString()
+                        if (payload.isNotBlank()) parseStreamEvent(eventName, payload)?.let(onEvent)
+                        eventName = null
+                        data.clear()
+                    }
+                }
+            }
+        }
+    }
+
     suspend fun listCommands(serverUrl: String, token: String): List<OpenCodeCommand> = withContext(Dispatchers.IO) {
         getJson<List<OpenCodeCommand>>("${serverUrl.trim().trimEnd('/')}/opencode/command", tokenRequired = true, token = token)
     }
@@ -200,6 +257,57 @@ class AgentClient(
             return json.decodeFromString<T>(responseBody)
         }
     }
+
+    private fun postEmpty(url: String, token: String, body: String) {
+        val request = Request.Builder()
+            .url(url)
+            .header("Authorization", "Bearer $token")
+            .header("Content-Type", "application/json")
+            .post(body.toRequestBody(jsonMediaType))
+            .build()
+        httpClient.newCall(request).execute().use { response ->
+            val responseBody = response.body?.string().orEmpty()
+            if (!response.isSuccessful) throw IOException("HTTP ${response.code}: $responseBody")
+        }
+    }
+
+    private fun parseStreamEvent(eventName: String?, payload: String): OpenCodeStreamEvent? {
+        val root = runCatching { json.parseToJsonElement(payload).jsonObject }.getOrNull() ?: return null
+        val type = root["type"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        val name = root["name"]?.jsonPrimitive?.contentOrNull ?: type
+        val properties = root["properties"]?.jsonObject ?: root["data"]?.jsonObject ?: root
+        val sessionId = properties["sessionID"]?.jsonPrimitive?.contentOrNull
+
+        return when (name) {
+            "session.next.text.delta", "session.next.text.delta.1", "message.part.delta" -> {
+                val delta = properties["delta"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                if (sessionId == null || delta.isEmpty()) null else OpenCodeStreamEvent.TextDelta(sessionId, delta)
+            }
+            "session.next.text.ended", "session.next.text.ended.1" -> {
+                val text = properties["text"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                if (sessionId == null) null else OpenCodeStreamEvent.TextEnded(sessionId, text)
+            }
+            "session.next.tool.called", "session.next.tool.called.1" -> {
+                val tool = properties["tool"]?.jsonPrimitive?.contentOrNull ?: "tool"
+                if (sessionId == null) null else OpenCodeStreamEvent.Tool(sessionId, tool)
+            }
+            "session.next.shell.started", "session.next.shell.started.1" -> {
+                val command = properties["command"]?.jsonPrimitive?.contentOrNull ?: "shell"
+                if (sessionId == null) null else OpenCodeStreamEvent.Tool(sessionId, command)
+            }
+            "session.next.tool.failed", "session.next.tool.failed.1", "session.error" -> {
+                val message = properties["error"]?.jsonObject?.get("message")?.jsonPrimitive?.contentOrNull
+                    ?: properties["message"]?.jsonPrimitive?.contentOrNull
+                    ?: eventName
+                    ?: name
+                if (sessionId == null) null else OpenCodeStreamEvent.Error(sessionId, message)
+            }
+            "session.idle", "session.status" -> {
+                if (sessionId == null) null else OpenCodeStreamEvent.Idle(sessionId)
+            }
+            else -> null
+        }
+    }
 }
 
 @Serializable
@@ -221,6 +329,16 @@ data class OpenCodeMessage(
     val role: String,
     val text: String,
 )
+
+sealed interface OpenCodeStreamEvent {
+    val sessionId: String
+
+    data class TextDelta(override val sessionId: String, val delta: String) : OpenCodeStreamEvent
+    data class TextEnded(override val sessionId: String, val text: String) : OpenCodeStreamEvent
+    data class Tool(override val sessionId: String, val title: String) : OpenCodeStreamEvent
+    data class Error(override val sessionId: String, val message: String) : OpenCodeStreamEvent
+    data class Idle(override val sessionId: String) : OpenCodeStreamEvent
+}
 
 sealed interface ConnectionResult {
     data class Success(
