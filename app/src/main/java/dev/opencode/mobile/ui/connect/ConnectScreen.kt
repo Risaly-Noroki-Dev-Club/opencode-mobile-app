@@ -31,11 +31,12 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.R
 import dev.opencode.mobile.data.AgentClient
 import dev.opencode.mobile.data.ConnectionResult
+import dev.opencode.mobile.ui.session.ChatConnection
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ConnectScreen() {
+fun ConnectScreen(onConnected: (ChatConnection) -> Unit) {
     val serverUrlPlaceholder = stringResource(R.string.server_url_placeholder)
     val connectionFailed = stringResource(R.string.connection_failed)
     var serverUrl by remember { mutableStateOf(serverUrlPlaceholder) }
@@ -100,7 +101,11 @@ fun ConnectScreen() {
                             isConnecting = true
                             result = null
                             scope.launch {
-                                result = agentClient.checkConnection(serverUrl, token)
+                                val connectionResult = agentClient.checkConnection(serverUrl, token)
+                                result = connectionResult
+                                if (connectionResult is ConnectionResult.Success) {
+                                    onConnected(ChatConnection(serverUrl.trim().trimEnd('/'), token))
+                                }
                                 isConnecting = false
                             }
                         },

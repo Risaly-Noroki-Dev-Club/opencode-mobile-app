@@ -12,4 +12,11 @@
     <string name="connection_success">已连接。Workspace 数量：%1$d。%2$s</string>
     <string name="upstream_ok">OpenCode 可以访问。</string>
     <string name="upstream_unavailable">暂时无法访问 OpenCode：%1$s</string>
+    <string name="session_title">OpenCode 会话</string>
+    <string name="message_input_label">输入消息</string>
+    <string name="send_button">发送</string>
+    <string name="sending_button">发送中…</string>
+    <string name="role_user">你</string>
+    <string name="role_assistant">OpenCode</string>
+    <string name="role_system">系统</string>
 </resources>
