@@ -40,6 +40,14 @@ import dev.opencode.mobile.data.ServerHistoryEntry
 import dev.opencode.mobile.data.SettingsStore
 import dev.opencode.mobile.data.ThemeMode
 import dev.opencode.mobile.ui.ServerConnection
+import dev.opencode.mobile.ui.theme.AdventureBackground
+import dev.opencode.mobile.ui.theme.AdventureCard
+import dev.opencode.mobile.ui.theme.AdventureFilledButton
+import dev.opencode.mobile.ui.theme.AdventureOutlinedTextField
+import dev.opencode.mobile.ui.theme.AdventureSectionLabel
+import dev.opencode.mobile.ui.theme.AdventureTextButton
+import dev.opencode.mobile.ui.theme.AdventureTopAppBar
+import dev.opencode.mobile.ui.theme.adventure
 import kotlinx.coroutines.launch
 
 @Composable
@@ -68,10 +76,10 @@ fun ConnectScreen(onConnected: (ServerConnection) -> Unit) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            AdventureTopAppBar(
                 title = { Text(stringResource(R.string.app_name)) },
                 actions = {
-                    TextButton(onClick = {
+                    AdventureTextButton(onClick = {
                         val next = when (themeMode) {
                             ThemeMode.System -> ThemeMode.Light
                             ThemeMode.Light -> ThemeMode.Dark
@@ -90,14 +98,16 @@ fun ConnectScreen(onConnected: (ServerConnection) -> Unit) {
                 },
             )
         },
+        backgroundColor = MaterialTheme.colors.background,
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(24.dp),
-            verticalArrangement = Arrangement.Center,
-        ) {
+        AdventureBackground {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.Center,
+            ) {
             Text(
                 text = stringResource(R.string.connect_title),
                 style = MaterialTheme.typography.h5,
@@ -106,26 +116,22 @@ fun ConnectScreen(onConnected: (ServerConnection) -> Unit) {
             Text(
                 text = stringResource(R.string.connect_description),
                 style = MaterialTheme.typography.body1,
-                color = MaterialTheme.colors.onSurface.copy(alpha = 0.7f),
+                color = MaterialTheme.adventure.textMedium,
             )
             Spacer(modifier = Modifier.height(32.dp))
-            Card(
-                backgroundColor = MaterialTheme.colors.onSurface.copy(alpha = 0.08f),
-                shape = MaterialTheme.shapes.medium,
-                elevation = 1.dp,
-            ) {
+            AdventureCard {
                 Column(
                     modifier = Modifier.padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    OutlinedTextField(
+                    AdventureOutlinedTextField(
                         value = serverUrl,
                         onValueChange = { serverUrl = it },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text(stringResource(R.string.server_url_label)) },
                         singleLine = true,
                     )
-                    OutlinedTextField(
+                    AdventureOutlinedTextField(
                         value = token,
                         onValueChange = { token = it },
                         modifier = Modifier.fillMaxWidth(),
@@ -133,7 +139,7 @@ fun ConnectScreen(onConnected: (ServerConnection) -> Unit) {
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                     )
-                    Button(
+                    AdventureFilledButton(
                         onClick = {
                             isConnecting = true
                             result = null
@@ -172,14 +178,10 @@ fun ConnectScreen(onConnected: (ServerConnection) -> Unit) {
             }
             if (history.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = stringResource(R.string.server_history_title),
-                    style = MaterialTheme.typography.subtitle2,
-                    color = MaterialTheme.colors.onSurface.copy(alpha = 0.7f),
-                )
+                AdventureSectionLabel(stringResource(R.string.server_history_title))
                 Spacer(modifier = Modifier.height(8.dp))
                 history.forEach { entry ->
-                    Card(
+                    AdventureCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 4.dp)
@@ -187,8 +189,7 @@ fun ConnectScreen(onConnected: (ServerConnection) -> Unit) {
                                 serverUrl = entry.serverUrl
                                 token = entry.token
                             },
-                        backgroundColor = MaterialTheme.colors.onSurface.copy(alpha = 0.05f),
-                        shape = MaterialTheme.shapes.medium,
+                        backgroundColor = MaterialTheme.adventure.cardContainer,
                         elevation = 0.dp,
                     ) {
                         Text(
@@ -199,6 +200,7 @@ fun ConnectScreen(onConnected: (ServerConnection) -> Unit) {
                     }
                 }
             }
+        }
         }
     }
 }
@@ -225,11 +227,9 @@ private fun ConnectionResultCard(result: ConnectionResult, connectionFailed: Str
         is ConnectionResult.Failure -> "$connectionFailed: ${result.message}"
     }
 
-    Card(
+    AdventureCard(
         backgroundColor = containerColor,
         contentColor = contentColor,
-        shape = MaterialTheme.shapes.medium,
-        elevation = 1.dp,
     ) {
         Text(
             text = text,

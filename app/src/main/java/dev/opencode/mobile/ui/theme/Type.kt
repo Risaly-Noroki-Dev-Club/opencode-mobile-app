@@ -14,13 +14,19 @@ private val TitilliumWeb = FontFamily(
     Font(R.font.titilliumweb_bold, weight = FontWeight.Bold),
 )
 
+private val AdventureSans = FontFamily.Default
+
 val AppTypography = Typography(
-    h1 = TextStyle(fontFamily = TitilliumWeb, fontWeight = FontWeight.Bold, fontSize = 96.sp),
-    h2 = TextStyle(fontFamily = TitilliumWeb, fontWeight = FontWeight.Bold, fontSize = 60.sp),
-    h3 = TextStyle(fontFamily = TitilliumWeb, fontWeight = FontWeight.SemiBold, fontSize = 48.sp),
-    h4 = TextStyle(fontFamily = TitilliumWeb, fontWeight = FontWeight.SemiBold, fontSize = 34.sp),
-    h5 = TextStyle(fontFamily = TitilliumWeb, fontWeight = FontWeight.Normal, fontSize = 24.sp),
-    h6 = TextStyle(fontFamily = TitilliumWeb, fontWeight = FontWeight.Normal, fontSize = 20.sp),
+    defaultFontFamily = AdventureSans,
+    h1 = TextStyle(fontFamily = AdventureSans, fontWeight = FontWeight.Bold, fontSize = 96.sp),
+    h2 = TextStyle(fontFamily = AdventureSans, fontWeight = FontWeight.Bold, fontSize = 60.sp),
+    h3 = TextStyle(fontFamily = AdventureSans, fontWeight = FontWeight.SemiBold, fontSize = 48.sp),
+    h4 = TextStyle(fontFamily = AdventureSans, fontWeight = FontWeight.SemiBold, fontSize = 34.sp),
+    h5 = TextStyle(fontFamily = AdventureSans, fontWeight = FontWeight.SemiBold, fontSize = 24.sp),
+    h6 = TextStyle(fontFamily = AdventureSans, fontWeight = FontWeight.SemiBold, fontSize = 20.sp),
+    subtitle1 = TextStyle(fontFamily = AdventureSans, fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
+    subtitle2 = TextStyle(fontFamily = AdventureSans, fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
+    button = TextStyle(fontFamily = AdventureSans, fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
     caption = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Normal, fontSize = 12.sp),
     overline = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Normal, fontSize = 10.sp),
 )

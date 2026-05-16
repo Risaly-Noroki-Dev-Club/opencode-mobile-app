@@ -4,32 +4,59 @@ import androidx.compose.material.darkColors
 import androidx.compose.material.lightColors
 import androidx.compose.ui.graphics.Color
 
+/**
+ * Adventure Island / Rakuraku design tokens.
+ *
+ * These values intentionally mirror the web radio frontend's CSS variables in
+ * rakurakumusicstation-ng/radio-backend/frontend/src/style.css so the mobile
+ * OpenCode client feels like it belongs to the same small product family.
+ */
+val AdventurePrimary = Color(0xFF003D99)
+val AdventurePrimaryDark = Color(0xFF002A6B)
+val AdventurePrimaryLight = Color(0xFF3366CC)
+val AdventureSecondary = Color(0xFF00897B)
+val AdventureSecondaryLight = Color(0xFF4DB6AC)
+val AdventureAccent = Color(0xFFFF6F00)
+val AdventureError = Color(0xFFB00020)
+
+val AdventureDarkPrimary = Color(0xFF8AB4F8)
+val AdventureDarkPrimaryVariant = Color(0xFF5E8EDB)
+val AdventureDarkSecondary = Color(0xFF5FD0C3)
+val AdventureDarkSecondaryVariant = Color(0xFF8FE4DC)
+val AdventureDarkAccent = Color(0xFFFFB86B)
+val AdventureDarkError = Color(0xFFFFB4AB)
+
 val LightColors = lightColors(
-    primary = Color(0xFF2C3E50),
-    primaryVariant = Color(0xFF1A252F),
-    secondary = Color(0xFF2980B9),
-    secondaryVariant = Color(0xFF1F6391),
-    background = Color(0xFFF8F9FA),
+    primary = AdventurePrimary,
+    primaryVariant = AdventurePrimaryDark,
+    secondary = AdventureSecondary,
+    secondaryVariant = AdventureSecondaryLight,
+    background = Color(0xFFFAFAFA),
     surface = Color(0xFFFFFFFF),
-    error = Color(0xFFC0392B),
+    error = AdventureError,
     onPrimary = Color(0xFFFFFFFF),
     onSecondary = Color(0xFFFFFFFF),
-    onBackground = Color(0xFF1A1A1A),
-    onSurface = Color(0xFF1A1A1A),
+    onBackground = Color(0xDE000000),
+    onSurface = Color(0xDE000000),
     onError = Color(0xFFFFFFFF),
 )
 
 val DarkColors = darkColors(
-    primary = Color(0xFF5DADE2),
-    primaryVariant = Color(0xFF3498DB),
-    secondary = Color(0xFF48C9B0),
-    secondaryVariant = Color(0xFF1ABC9C),
-    background = Color(0xFF121212),
-    surface = Color(0xFF1E1E1E),
-    error = Color(0xFFE74C3C),
-    onPrimary = Color(0xFF000000),
-    onSecondary = Color(0xFF000000),
-    onBackground = Color(0xFFE0E0E0),
-    onSurface = Color(0xFFE0E0E0),
-    onError = Color(0xFF000000),
+    primary = AdventureDarkPrimary,
+    primaryVariant = AdventureDarkPrimaryVariant,
+    secondary = AdventureDarkSecondary,
+    secondaryVariant = AdventureDarkSecondaryVariant,
+    background = Color(0xFF101114),
+    surface = Color(0xFF191B20),
+    error = AdventureDarkError,
+    onPrimary = Color(0xFF101114),
+    onSecondary = Color(0xFF101114),
+    onBackground = Color(0xEBFFFFFF),
+    onSurface = Color(0xEBFFFFFF),
+    onError = Color(0xFF101114),
 )
+
+val LightSurface2 = Color(0xFFF5F5F5)
+val LightSurface3 = Color(0xFFEEEEEE)
+val DarkSurface2 = Color(0xFF23262D)
+val DarkSurface3 = Color(0xFF2D313A)
