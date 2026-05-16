@@ -39,4 +39,5 @@
     <string name="template_explain_title">Explain project</string>
     <string name="template_explain_description">Map the structure and important entry points.</string>
     <string name="template_explain_prompt">Explain this project structure, key entry points, and how to run or verify it.</string>
+    <string name="history_loaded">History loaded</string>
 </resources>

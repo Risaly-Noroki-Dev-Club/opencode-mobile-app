@@ -147,6 +147,21 @@ class AgentClient(
         }.sortedWith(compareBy<ModelOption> { it.providerName }.thenBy { it.modelName })
     }
 
+    suspend fun listMessages(serverUrl: String, token: String, sessionId: String): List<OpenCodeMessage> = withContext(Dispatchers.IO) {
+        getJson<List<MessageHistoryItem>>(
+            url = "${serverUrl.trim().trimEnd('/')}/opencode/session/$sessionId/message",
+            tokenRequired = true,
+            token = token,
+        ).mapNotNull { item ->
+            val text = item.parts
+                .filter { it.type == "text" }
+                .joinToString(separator = "\n") { it.text.orEmpty() }
+                .trim()
+            if (text.isBlank()) return@mapNotNull null
+            OpenCodeMessage(role = item.info.role, text = text)
+        }
+    }
+
     private inline fun <reified T> getJson(url: String, tokenRequired: Boolean, token: String): T {
         val builder = Request.Builder().url(url)
         if (tokenRequired) builder.header("Authorization", "Bearer $token")
@@ -202,6 +217,11 @@ data class ModelOption(
     val label: String = "$providerName / $modelName"
 }
 
+data class OpenCodeMessage(
+    val role: String,
+    val text: String,
+)
+
 sealed interface ConnectionResult {
     data class Success(
         val upstreamHealthy: Boolean,
@@ -251,4 +271,15 @@ private data class MessageResponse(
 private data class MessagePart(
     val type: String,
     val text: String? = null,
+)
+
+@Serializable
+private data class MessageHistoryItem(
+    val info: MessageInfo,
+    val parts: List<MessagePart> = emptyList(),
+)
+
+@Serializable
+private data class MessageInfo(
+    val role: String,
 )

@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.R
 import dev.opencode.mobile.data.AgentClient
 import dev.opencode.mobile.data.ModelOption
+import dev.opencode.mobile.data.OpenCodeMessage
 import dev.opencode.mobile.data.OpenCodeCommand
 import kotlinx.coroutines.launch
 
@@ -75,6 +76,13 @@ fun SessionScreen(connection: ChatConnection) {
             .onSuccess {
                 sessionId = it
                 messages += ChatMessage(ChatRole.System, "${connection.serverUrl}\n${it}")
+                runCatching { agentClient.listMessages(connection.serverUrl, connection.token, it) }
+                    .onSuccess { history ->
+                        if (history.isNotEmpty()) {
+                            messages.clear()
+                            messages += history.map { message -> message.toChatMessage() }
+                        }
+                    }
             }
             .onFailure {
                 messages += ChatMessage(ChatRole.System, it.message ?: "Failed to create session")
@@ -357,7 +365,20 @@ private fun MessageCard(message: ChatMessage) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(text = title, style = MaterialTheme.typography.labelLarge)
             Spacer(modifier = Modifier.height(6.dp))
-            Text(text = message.text, style = MaterialTheme.typography.bodyMedium)
+            if (message.role == ChatRole.Assistant) {
+                MarkdownText(text = message.text)
+            } else {
+                Text(text = message.text, style = MaterialTheme.typography.bodyMedium)
+            }
         }
     }
+}
+
+private fun OpenCodeMessage.toChatMessage(): ChatMessage {
+    val chatRole = when (role) {
+        "user" -> ChatRole.User
+        "assistant" -> ChatRole.Assistant
+        else -> ChatRole.System
+    }
+    return ChatMessage(role = chatRole, text = text)
 }
