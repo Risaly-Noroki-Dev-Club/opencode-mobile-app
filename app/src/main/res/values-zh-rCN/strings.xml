@@ -7,4 +7,9 @@
     <string name="server_url_placeholder">https://你的服务器.example.com</string>
     <string name="token_label">访问令牌</string>
     <string name="connect_button">连接</string>
+    <string name="connecting_button">连接中…</string>
+    <string name="connection_failed">连接失败</string>
+    <string name="connection_success">已连接。Workspace 数量：%1$d。%2$s</string>
+    <string name="upstream_ok">OpenCode 可以访问。</string>
+    <string name="upstream_unavailable">暂时无法访问 OpenCode：%1$s</string>
 </resources>

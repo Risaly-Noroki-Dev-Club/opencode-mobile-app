@@ -7,4 +7,9 @@
     <string name="server_url_placeholder">https://your-server.example.com</string>
     <string name="token_label">Token</string>
     <string name="connect_button">Connect</string>
+    <string name="connecting_button">Connecting…</string>
+    <string name="connection_failed">Connection failed</string>
+    <string name="connection_success">Connected. Workspaces: %1$d. %2$s</string>
+    <string name="upstream_ok">OpenCode is reachable.</string>
+    <string name="upstream_unavailable">OpenCode is not reachable yet: %1$s</string>
 </resources>

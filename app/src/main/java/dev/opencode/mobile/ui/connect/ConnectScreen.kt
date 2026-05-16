@@ -12,6 +12,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -21,19 +22,28 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.R
+import dev.opencode.mobile.data.AgentClient
+import dev.opencode.mobile.data.ConnectionResult
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConnectScreen() {
     val serverUrlPlaceholder = stringResource(R.string.server_url_placeholder)
+    val connectionFailed = stringResource(R.string.connection_failed)
     var serverUrl by remember { mutableStateOf(serverUrlPlaceholder) }
     var token by remember { mutableStateOf("") }
+    var isConnecting by remember { mutableStateOf(false) }
+    var result by remember { mutableStateOf<ConnectionResult?>(null) }
+    val agentClient = remember { AgentClient() }
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
@@ -86,14 +96,71 @@ fun ConnectScreen() {
                         visualTransformation = PasswordVisualTransformation(),
                     )
                     Button(
-                        onClick = {},
+                        onClick = {
+                            isConnecting = true
+                            result = null
+                            scope.launch {
+                                result = agentClient.checkConnection(serverUrl, token)
+                                isConnecting = false
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(18.dp),
+                        enabled = !isConnecting,
                     ) {
-                        Text(stringResource(R.string.connect_button))
+                        Text(
+                            if (isConnecting) {
+                                stringResource(R.string.connecting_button)
+                            } else {
+                                stringResource(R.string.connect_button)
+                            },
+                        )
+                    }
+                    if (isConnecting) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                    result?.let { connectionResult ->
+                        ConnectionResultCard(
+                            result = connectionResult,
+                            connectionFailed = connectionFailed,
+                        )
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ConnectionResultCard(result: ConnectionResult, connectionFailed: String) {
+    val containerColor = when (result) {
+        is ConnectionResult.Success -> MaterialTheme.colorScheme.primaryContainer
+        is ConnectionResult.Failure -> MaterialTheme.colorScheme.errorContainer
+    }
+    val contentColor = when (result) {
+        is ConnectionResult.Success -> MaterialTheme.colorScheme.onPrimaryContainer
+        is ConnectionResult.Failure -> MaterialTheme.colorScheme.onErrorContainer
+    }
+    val text = when (result) {
+        is ConnectionResult.Success -> {
+            val upstream = if (result.upstreamHealthy) {
+                stringResource(R.string.upstream_ok)
+            } else {
+                stringResource(R.string.upstream_unavailable, result.upstreamError ?: "unknown")
+            }
+            stringResource(R.string.connection_success, result.workspaceCount, upstream)
+        }
+        is ConnectionResult.Failure -> "$connectionFailed: ${result.message}"
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = containerColor, contentColor = contentColor),
+        shape = RoundedCornerShape(20.dp),
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(16.dp),
+            style = MaterialTheme.typography.bodyMedium,
+        )
     }
 }
