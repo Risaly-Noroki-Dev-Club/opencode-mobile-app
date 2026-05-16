@@ -9,12 +9,10 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.booleanOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
@@ -219,6 +217,36 @@ class AgentClient(
         }
     }
 
+    suspend fun getSessionDiff(serverUrl: String, token: String, sessionId: String): List<DiffFile> = withContext(Dispatchers.IO) {
+        val root = getJson<JsonElement>(
+            url = "${serverUrl.trim().trimEnd('/')}/opencode/session/$sessionId/diff",
+            tokenRequired = true,
+            token = token,
+        )
+        root.jsonArrayOrEmpty().mapIndexed { index, element ->
+            val obj = element as? JsonObject
+            val path = obj?.get("path")?.jsonPrimitive?.contentOrNull
+                ?: obj?.get("file")?.jsonPrimitive?.contentOrNull
+                ?: obj?.get("name")?.jsonPrimitive?.contentOrNull
+                ?: "diff-${index + 1}"
+            DiffFile(
+                path = path,
+                text = json.encodeToString(JsonElement.serializer(), element),
+            )
+        }
+    }
+
+    suspend fun replyPermission(serverUrl: String, token: String, requestId: String, reply: PermissionReply) = withContext(Dispatchers.IO) {
+        val payload = buildJsonObject {
+            put("reply", reply.wireValue)
+        }
+        postJson<Boolean>(
+            url = "${serverUrl.trim().trimEnd('/')}/opencode/permission/$requestId/reply",
+            token = token,
+            body = json.encodeToString(payload),
+        )
+    }
+
     private inline fun <reified T> getJson(url: String, tokenRequired: Boolean, token: String): T {
         val builder = Request.Builder().url(url)
         if (tokenRequired) builder.header("Authorization", "Bearer $token")
@@ -305,10 +333,24 @@ class AgentClient(
             "session.idle", "session.status" -> {
                 if (sessionId == null) null else OpenCodeStreamEvent.Idle(sessionId)
             }
+            "permission.asked" -> {
+                val requestId = properties["id"]?.jsonPrimitive?.contentOrNull ?: root["id"]?.jsonPrimitive?.contentOrNull
+                val permissionSessionId = properties["sessionID"]?.jsonPrimitive?.contentOrNull
+                val permission = properties["permission"]?.jsonPrimitive?.contentOrNull ?: "permission"
+                val patterns = properties["patterns"].jsonArrayOrEmpty().mapNotNull { it.jsonPrimitive.contentOrNull }
+                if (requestId == null || permissionSessionId == null) null else OpenCodeStreamEvent.Permission(
+                    sessionId = permissionSessionId,
+                    requestId = requestId,
+                    title = permission,
+                    details = patterns.joinToString("\n").ifBlank { permission },
+                )
+            }
             else -> null
         }
     }
 }
+
+private fun JsonElement?.jsonArrayOrEmpty(): JsonArray = this as? JsonArray ?: JsonArray(emptyList())
 
 @Serializable
 data class OpenCodeCommand(
@@ -330,6 +372,17 @@ data class OpenCodeMessage(
     val text: String,
 )
 
+data class DiffFile(
+    val path: String,
+    val text: String,
+)
+
+enum class PermissionReply(val wireValue: String) {
+    Once("once"),
+    Always("always"),
+    Reject("reject"),
+}
+
 sealed interface OpenCodeStreamEvent {
     val sessionId: String
 
@@ -338,6 +391,12 @@ sealed interface OpenCodeStreamEvent {
     data class Tool(override val sessionId: String, val title: String) : OpenCodeStreamEvent
     data class Error(override val sessionId: String, val message: String) : OpenCodeStreamEvent
     data class Idle(override val sessionId: String) : OpenCodeStreamEvent
+    data class Permission(
+        override val sessionId: String,
+        val requestId: String,
+        val title: String,
+        val details: String,
+    ) : OpenCodeStreamEvent
 }
 
 sealed interface ConnectionResult {

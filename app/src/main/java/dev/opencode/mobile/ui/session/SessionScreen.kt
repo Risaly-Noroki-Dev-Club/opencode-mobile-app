@@ -39,10 +39,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.R
 import dev.opencode.mobile.data.AgentClient
+import dev.opencode.mobile.data.DiffFile
 import dev.opencode.mobile.data.ModelOption
 import dev.opencode.mobile.data.OpenCodeMessage
 import dev.opencode.mobile.data.OpenCodeCommand
 import dev.opencode.mobile.data.OpenCodeStreamEvent
+import dev.opencode.mobile.data.PermissionReply
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -73,6 +75,9 @@ fun SessionScreen(connection: ChatConnection) {
     var models by remember { mutableStateOf<List<ModelOption>>(emptyList()) }
     var selectedModel by remember { mutableStateOf<ModelOption?>(null) }
     var streamActive by remember { mutableStateOf(false) }
+    var showDiff by remember { mutableStateOf(false) }
+    var diffFiles by remember { mutableStateOf<List<DiffFile>>(emptyList()) }
+    var pendingPermission by remember { mutableStateOf<OpenCodeStreamEvent.Permission?>(null) }
 
     LaunchedEffect(connection) {
         busy = true
@@ -117,6 +122,7 @@ fun SessionScreen(connection: ChatConnection) {
                             is OpenCodeStreamEvent.Tool -> messages += ChatMessage(ChatRole.Tool, event.title)
                             is OpenCodeStreamEvent.Error -> messages += ChatMessage(ChatRole.System, event.message)
                             is OpenCodeStreamEvent.Idle -> busy = false
+                            is OpenCodeStreamEvent.Permission -> pendingPermission = event
                         }
                     }
                 }
@@ -253,6 +259,37 @@ fun SessionScreen(connection: ChatConnection) {
                 messages += ChatMessage(ChatRole.System, "${it.providerName} / ${it.modelName}")
                 showNavi = false
             },
+            onDiff = {
+                val activeSession = sessionId ?: return@NaviSheet
+                showNavi = false
+                scope.launch {
+                    runCatching { agentClient.getSessionDiff(connection.serverUrl, connection.token, activeSession) }
+                        .onSuccess {
+                            diffFiles = it
+                            showDiff = true
+                        }
+                        .onFailure { messages += ChatMessage(ChatRole.System, it.message ?: "Diff failed") }
+                }
+            },
+        )
+    }
+
+    if (showDiff) {
+        DiffSheet(diffFiles = diffFiles, onDismiss = { showDiff = false })
+    }
+
+    pendingPermission?.let { permission ->
+        PermissionSheet(
+            permission = permission,
+            onDismiss = { pendingPermission = null },
+            onReply = { reply ->
+                scope.launch {
+                    runCatching { agentClient.replyPermission(connection.serverUrl, connection.token, permission.requestId, reply) }
+                        .onSuccess { messages += ChatMessage(ChatRole.System, "${permission.title}: ${reply.wireValue}") }
+                        .onFailure { messages += ChatMessage(ChatRole.System, it.message ?: "Permission reply failed") }
+                    pendingPermission = null
+                }
+            },
         )
     }
 }
@@ -267,6 +304,7 @@ private fun NaviSheet(
     onTemplate: (String) -> Unit,
     onCommand: (OpenCodeCommand) -> Unit,
     onModel: (ModelOption) -> Unit,
+    onDiff: () -> Unit,
 ) {
     val templates = promptTemplates()
 
@@ -294,6 +332,13 @@ private fun NaviSheet(
                 )
             }
             item { NaviSectionTitle(stringResource(R.string.navi_section_templates)) }
+            item {
+                NaviActionCard(
+                    title = stringResource(R.string.navi_diff_title),
+                    description = stringResource(R.string.navi_diff_description),
+                    onClick = onDiff,
+                )
+            }
             items(templates) { item ->
                 NaviActionCard(title = item.title, description = item.description) { onTemplate(item.prompt) }
             }
@@ -318,6 +363,75 @@ private fun NaviSheet(
                 }
             }
             item { Spacer(modifier = Modifier.height(20.dp)) }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DiffSheet(diffFiles: List<DiffFile>, onDismiss: () -> Unit) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(topStart = 36.dp, topEnd = 36.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+    ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            item {
+                Text(text = stringResource(R.string.diff_title), style = MaterialTheme.typography.headlineSmall)
+                Text(
+                    text = if (diffFiles.isEmpty()) stringResource(R.string.diff_empty) else stringResource(R.string.diff_count, diffFiles.size),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            items(diffFiles) { file ->
+                Card(
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(text = file.path, style = MaterialTheme.typography.titleSmall)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        MarkdownText(text = "```json\n${file.text}\n```")
+                    }
+                }
+            }
+            item { Spacer(modifier = Modifier.height(20.dp)) }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PermissionSheet(
+    permission: OpenCodeStreamEvent.Permission,
+    onDismiss: () -> Unit,
+    onReply: (PermissionReply) -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(topStart = 36.dp, topEnd = 36.dp),
+        containerColor = MaterialTheme.colorScheme.errorContainer,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(text = stringResource(R.string.permission_title), style = MaterialTheme.typography.headlineSmall)
+            Text(text = permission.title, style = MaterialTheme.typography.titleMedium)
+            Text(text = permission.details, style = MaterialTheme.typography.bodyMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { onReply(PermissionReply.Reject) }) { Text(stringResource(R.string.permission_reject)) }
+                Button(onClick = { onReply(PermissionReply.Once) }) { Text(stringResource(R.string.permission_once)) }
+                Button(onClick = { onReply(PermissionReply.Always) }) { Text(stringResource(R.string.permission_always)) }
+            }
         }
     }
 }

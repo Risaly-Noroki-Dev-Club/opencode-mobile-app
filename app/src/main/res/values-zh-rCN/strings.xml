@@ -28,6 +28,15 @@
     <string name="navi_section_opencode">OpenCode</string>
     <string name="navi_section_models">模型</string>
     <string name="navi_native_command">OpenCode 原生命令</string>
+    <string name="navi_diff_title">查看 Diff</string>
+    <string name="navi_diff_description">查看当前会话产生的文件改动。</string>
+    <string name="diff_title">会话 Diff</string>
+    <string name="diff_empty">暂时没有文件改动。</string>
+    <string name="diff_count">%1$d 个文件有改动</string>
+    <string name="permission_title">权限请求</string>
+    <string name="permission_reject">拒绝</string>
+    <string name="permission_once">允许一次</string>
+    <string name="permission_always">总是允许</string>
     <string name="template_review_title">审查改动</string>
     <string name="template_review_description">找出 bug、风险和缺少的测试。</string>
     <string name="template_review_prompt">请审查当前改动，重点指出 bug、行为回归、风险和缺少的测试。</string>

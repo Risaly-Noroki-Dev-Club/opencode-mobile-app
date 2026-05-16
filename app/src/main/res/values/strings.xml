@@ -28,6 +28,15 @@
     <string name="navi_section_opencode">OpenCode</string>
     <string name="navi_section_models">Models</string>
     <string name="navi_native_command">Native OpenCode command</string>
+    <string name="navi_diff_title">View diff</string>
+    <string name="navi_diff_description">Inspect session file changes.</string>
+    <string name="diff_title">Session diff</string>
+    <string name="diff_empty">No file changes yet.</string>
+    <string name="diff_count">%1$d changed files</string>
+    <string name="permission_title">Permission request</string>
+    <string name="permission_reject">Reject</string>
+    <string name="permission_once">Allow once</string>
+    <string name="permission_always">Always allow</string>
     <string name="template_review_title">Review changes</string>
     <string name="template_review_description">Find bugs, risks, and missing tests.</string>
     <string name="template_review_prompt">Review the current changes. Focus on bugs, behavioral regressions, risks, and missing tests.</string>
