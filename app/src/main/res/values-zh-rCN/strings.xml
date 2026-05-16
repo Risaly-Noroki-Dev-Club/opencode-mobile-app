@@ -76,4 +76,11 @@
     <string name="provider_model_name_label">模型名称</string>
     <string name="provider_submit">提交</string>
     <string name="provider_success">完成，模型列表即将刷新。</string>
+    <string name="copy_button">复制</string>
+    <string name="copy_message_button">复制消息</string>
+    <string name="retry_prompt_button">编辑并重发</string>
+    <string name="scroll_bottom_button">回到底部</string>
+    <string name="delete_button">删除</string>
+    <string name="session_search_label">搜索会话</string>
+    <string name="model_search_label">搜索模型</string>
 </resources>

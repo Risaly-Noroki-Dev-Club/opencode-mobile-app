@@ -91,6 +91,13 @@ class AgentClient(
         response.id
     }
 
+    suspend fun deleteSession(serverUrl: String, token: String, sessionId: String, directory: String? = null): Unit = withContext(Dispatchers.IO) {
+        delete(
+            url = withDirectoryQuery("${serverUrl.trim().trimEnd('/')}/opencode/session/$sessionId", directory),
+            token = token,
+        )
+    }
+
     suspend fun sendMessage(serverUrl: String, token: String, sessionId: String, text: String): String = withContext(Dispatchers.IO) {
         sendMessage(serverUrl, token, sessionId, text, null, null)
     }
@@ -187,6 +194,7 @@ class AgentClient(
     suspend fun streamEvents(
         serverUrl: String,
         token: String,
+        onOpen: () -> Unit = {},
         onEvent: (OpenCodeStreamEvent) -> Unit,
     ) = withContext(Dispatchers.IO) {
         val request = Request.Builder()
@@ -195,6 +203,7 @@ class AgentClient(
             .build()
         httpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw IOException("HTTP ${response.code}: ${response.body?.string().orEmpty()}")
+            onOpen()
             val source = response.body?.source() ?: throw IOException("Missing event stream body")
             var eventName: String? = null
             val data = StringBuilder()
@@ -273,7 +282,11 @@ class AgentClient(
                 ?: "diff-${index + 1}"
             DiffFile(
                 path = path,
-                text = json.encodeToString(JsonElement.serializer(), element),
+                text = obj?.get("diff")?.jsonPrimitive?.contentOrNull
+                    ?: obj?.get("patch")?.jsonPrimitive?.contentOrNull
+                    ?: obj?.get("content")?.jsonPrimitive?.contentOrNull
+                    ?: obj?.get("text")?.jsonPrimitive?.contentOrNull
+                    ?: json.encodeToString(JsonElement.serializer(), element),
             )
         }
     }
@@ -398,6 +411,18 @@ class AgentClient(
             .header("Authorization", "Bearer $token")
             .header("Content-Type", "application/json")
             .post(body.toRequestBody(jsonMediaType))
+            .build()
+        httpClient.newCall(request).execute().use { response ->
+            val responseBody = response.body?.string().orEmpty()
+            if (!response.isSuccessful) throw IOException("HTTP ${response.code}: $responseBody")
+        }
+    }
+
+    private fun delete(url: String, token: String) {
+        val request = Request.Builder()
+            .url(url)
+            .header("Authorization", "Bearer $token")
+            .delete()
             .build()
         httpClient.newCall(request).execute().use { response ->
             val responseBody = response.body?.string().orEmpty()

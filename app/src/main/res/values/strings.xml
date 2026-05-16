@@ -76,4 +76,11 @@
     <string name="provider_model_name_label">Model name</string>
     <string name="provider_submit">Submit</string>
     <string name="provider_success">Done. Models will refresh.</string>
+    <string name="copy_button">Copy</string>
+    <string name="copy_message_button">Copy message</string>
+    <string name="retry_prompt_button">Edit and resend</string>
+    <string name="scroll_bottom_button">Jump to bottom</string>
+    <string name="delete_button">Delete</string>
+    <string name="session_search_label">Search sessions</string>
+    <string name="model_search_label">Search models</string>
 </resources>

@@ -1,20 +1,29 @@
 package dev.opencode.mobile.ui.session
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
+import androidx.compose.material.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
+import dev.opencode.mobile.R
+import androidx.compose.ui.res.stringResource
 
 @Composable
 fun MarkdownText(text: String, modifier: Modifier = Modifier) {
@@ -54,27 +63,54 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier) {
 
 @Composable
 private fun CodeBlock(code: String, language: String?) {
+    val clipboard = LocalClipboardManager.current
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(4.dp))
             .background(MaterialTheme.colors.onSurface.copy(alpha = 0.12f))
-            .padding(14.dp),
+            .padding(12.dp),
     ) {
-        if (!language.isNullOrBlank()) {
+        Row(modifier = Modifier.fillMaxWidth()) {
             Text(
-                text = language,
+                text = language?.ifBlank { null } ?: "code",
                 style = MaterialTheme.typography.overline,
                 color = MaterialTheme.colors.primary,
+                modifier = Modifier.weight(1f),
             )
-            Spacer(modifier = Modifier.height(6.dp))
+            TextButton(onClick = { clipboard.setText(AnnotatedString(code.trimEnd())) }) {
+                Text(stringResource(R.string.copy_button))
+            }
         }
-        Text(
-            text = code.trimEnd(),
-            style = MaterialTheme.typography.caption,
-            fontFamily = FontFamily.Monospace,
-        )
+        Spacer(modifier = Modifier.height(6.dp))
+        if (language.equals("diff", ignoreCase = true)) {
+            Column(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                code.trimEnd().lines().forEach { line ->
+                    Text(
+                        text = line,
+                        style = MaterialTheme.typography.caption,
+                        fontFamily = FontFamily.Monospace,
+                        color = diffLineColor(line),
+                    )
+                }
+            }
+        } else {
+            Text(
+                text = code.trimEnd(),
+                style = MaterialTheme.typography.caption,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+            )
+        }
     }
+}
+
+@Composable
+private fun diffLineColor(line: String): Color = when {
+    line.startsWith("+") && !line.startsWith("+++") -> Color(0xFF2E7D32)
+    line.startsWith("-") && !line.startsWith("---") -> Color(0xFFC62828)
+    line.startsWith("@@") -> MaterialTheme.colors.primary
+    else -> MaterialTheme.colors.onSurface
 }
 
 private sealed interface MarkdownBlock {

@@ -13,6 +13,7 @@ import androidx.compose.material.Button
 import androidx.compose.material.Card
 import androidx.compose.material.LinearProgressIndicator
 import androidx.compose.material.MaterialTheme
+import androidx.compose.material.OutlinedTextField
 import androidx.compose.material.Scaffold
 import androidx.compose.material.Text
 import androidx.compose.material.TextButton
@@ -50,6 +51,7 @@ fun SessionListScreen(
     var loading by remember { mutableStateOf(false) }
     var creating by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var query by remember { mutableStateOf("") }
 
     fun refresh() {
         loading = true
@@ -89,6 +91,12 @@ fun SessionListScreen(
 
     LaunchedEffect(connection, project.id) { refresh() }
 
+    val visibleSessions = sessions.filter { session ->
+        val value = query.trim()
+        value.isBlank() || session.title.contains(value, ignoreCase = true) ||
+            session.directory.contains(value, ignoreCase = true) || session.id.contains(value, ignoreCase = true)
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -121,12 +129,28 @@ fun SessionListScreen(
             ) {
                 Text(if (creating) stringResource(R.string.creating_session_button) else stringResource(R.string.new_session_button))
             }
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(stringResource(R.string.session_search_label)) },
+                singleLine = true,
+            )
             if (loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             error?.let { ErrorCard(it) }
-            if (!loading && sessions.isEmpty() && error == null) EmptyCard(stringResource(R.string.sessions_empty))
+            if (!loading && visibleSessions.isEmpty() && error == null) EmptyCard(stringResource(R.string.sessions_empty))
             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(sessions) { session ->
-                    SessionCard(session = session) {
+                items(visibleSessions) { session ->
+                    SessionCard(
+                        session = session,
+                        onDelete = {
+                            scope.launch {
+                                runCatching { agentClient.deleteSession(connection.serverUrl, connection.token, session.id, session.directory) }
+                                    .onSuccess { refresh() }
+                                    .onFailure { error = it.message ?: "Failed to delete session" }
+                            }
+                        },
+                    ) {
                         onSession(
                             ActiveSession(
                                 id = session.id,
@@ -143,7 +167,7 @@ fun SessionListScreen(
 }
 
 @Composable
-private fun SessionCard(session: AgentSession, onClick: () -> Unit) {
+private fun SessionCard(session: AgentSession, onDelete: () -> Unit, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -158,6 +182,7 @@ private fun SessionCard(session: AgentSession, onClick: () -> Unit) {
                 Text(text = formatTime(session.lastActive), style = MaterialTheme.typography.caption)
             }
             Text(text = session.directory, style = MaterialTheme.typography.body2, color = MaterialTheme.colors.onSurface.copy(alpha = 0.7f))
+            TextButton(onClick = onDelete) { Text(stringResource(R.string.delete_button)) }
         }
     }
 }

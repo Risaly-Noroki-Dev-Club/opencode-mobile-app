@@ -1,6 +1,8 @@
 package dev.opencode.mobile.ui.session
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,12 +13,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.Button
 import androidx.compose.material.Card
+import androidx.compose.material.DropdownMenu
+import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.FilterChip
+import androidx.compose.material.LinearProgressIndicator
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.ModalBottomSheetLayout
 import androidx.compose.material.ModalBottomSheetValue
@@ -36,6 +43,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.R
@@ -49,6 +58,7 @@ import dev.opencode.mobile.data.PermissionReply
 import dev.opencode.mobile.ui.ActiveSession
 import dev.opencode.mobile.ui.ServerConnection
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -58,6 +68,8 @@ private data class ChatMessage(
 )
 
 private enum class ChatRole { User, Assistant, System, Tool }
+
+private enum class StreamStatus { Connecting, Connected, Reconnecting, Disconnected, Error }
 
 private sealed interface SheetContent {
     data object None : SheetContent
@@ -69,7 +81,7 @@ private sealed interface SheetContent {
     data object LoginProvider : SheetContent
 }
 
-@OptIn(ExperimentalMaterialApi::class)
+@OptIn(ExperimentalMaterialApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun SessionScreen(
     connection: ServerConnection,
@@ -86,9 +98,12 @@ fun SessionScreen(
     var commands by remember { mutableStateOf<List<OpenCodeCommand>>(emptyList()) }
     var models by remember { mutableStateOf<List<ModelOption>>(emptyList()) }
     var selectedModel by remember { mutableStateOf<ModelOption?>(null) }
-    var streamActive by remember { mutableStateOf(false) }
+    var streamStatus by remember { mutableStateOf(StreamStatus.Connecting) }
+    var streamError by remember { mutableStateOf<String?>(null) }
+    var awaitingResponse by remember { mutableStateOf(false) }
     var diffFiles by remember { mutableStateOf<List<DiffFile>>(emptyList()) }
     var pendingPermission by remember { mutableStateOf<OpenCodeStreamEvent.Permission?>(null) }
+    val listState = rememberLazyListState()
 
     val sheetState = rememberModalBottomSheetState(
         initialValue = ModalBottomSheetValue.Hidden,
@@ -124,26 +139,57 @@ fun SessionScreen(
 
     LaunchedEffect(connection, sessionId) {
         val activeSession = sessionId ?: return@LaunchedEffect
-        runCatching {
-            streamActive = true
-            agentClient.streamEvents(connection.serverUrl, connection.token) { event ->
-                if (event.sessionId != activeSession) return@streamEvents
-                scope.launch {
-                    withContext(Dispatchers.Main) {
-                        when (event) {
-                            is OpenCodeStreamEvent.TextDelta -> appendAssistantDelta(messages, event.delta)
-                            is OpenCodeStreamEvent.TextEnded -> finalizeAssistantText(messages, event.text)
-                            is OpenCodeStreamEvent.Tool -> messages += ChatMessage(ChatRole.Tool, event.title)
-                            is OpenCodeStreamEvent.Error -> messages += ChatMessage(ChatRole.System, event.message)
-                            is OpenCodeStreamEvent.Idle -> busy = false
-                            is OpenCodeStreamEvent.Permission -> pendingPermission = event
+        var reconnectDelayMs = 1000L
+        while (true) {
+            streamStatus = if (streamStatus == StreamStatus.Connected) StreamStatus.Reconnecting else StreamStatus.Connecting
+            streamError = null
+            runCatching {
+                agentClient.streamEvents(
+                    serverUrl = connection.serverUrl,
+                    token = connection.token,
+                    onOpen = { scope.launch { streamStatus = StreamStatus.Connected } },
+                ) { event ->
+                    if (event.sessionId != activeSession) return@streamEvents
+                    scope.launch {
+                        withContext(Dispatchers.Main) {
+                            streamStatus = StreamStatus.Connected
+                            streamError = null
+                            reconnectDelayMs = 1000L
+                            when (event) {
+                                is OpenCodeStreamEvent.TextDelta -> {
+                                    awaitingResponse = false
+                                    appendAssistantDelta(messages, event.delta)
+                                }
+                                is OpenCodeStreamEvent.TextEnded -> {
+                                    awaitingResponse = false
+                                    finalizeAssistantText(messages, event.text)
+                                }
+                                is OpenCodeStreamEvent.Tool -> messages += ChatMessage(ChatRole.Tool, event.title)
+                                is OpenCodeStreamEvent.Error -> {
+                                    awaitingResponse = false
+                                    messages += ChatMessage(ChatRole.System, event.message)
+                                }
+                                is OpenCodeStreamEvent.Idle -> {
+                                    busy = false
+                                    awaitingResponse = false
+                                }
+                                is OpenCodeStreamEvent.Permission -> pendingPermission = event
+                            }
                         }
                     }
                 }
+            }.onFailure {
+                streamStatus = StreamStatus.Error
+                streamError = it.message ?: "Event stream failed"
             }
-        }.onFailure {
-            streamActive = false
-            messages += ChatMessage(ChatRole.System, it.message ?: "Event stream failed")
+            delay(reconnectDelayMs)
+            reconnectDelayMs = (reconnectDelayMs * 2).coerceAtMost(10000L)
+        }
+    }
+
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty() && listState.isNearBottom()) {
+            listState.animateScrollToItem(messages.lastIndex)
         }
     }
 
@@ -294,7 +340,7 @@ fun SessionScreen(
                         Column {
                             Text(activeSession.title?.ifBlank { stringResource(R.string.session_title) } ?: stringResource(R.string.session_title))
                             Text(
-                                text = selectedModel?.label ?: activeSession.directory ?: stringResource(R.string.model_default),
+                                text = "${streamStatus.label()} · ${selectedModel?.label ?: activeSession.directory ?: stringResource(R.string.model_default)}",
                                 style = MaterialTheme.typography.overline,
                                 color = MaterialTheme.colors.onSurface.copy(alpha = 0.7f),
                             )
@@ -317,15 +363,30 @@ fun SessionScreen(
                     .padding(padding)
                     .padding(16.dp),
             ) {
+                streamError?.let {
+                    StatusCard(message = it)
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+                if (awaitingResponse) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     items(messages) { message ->
-                        MessageCard(message)
+                        MessageCard(message = message, onRetry = { retryText -> input = retryText })
                     }
+                }
+                if (!listState.isNearBottom() && messages.isNotEmpty()) {
+                    TextButton(
+                        onClick = { scope.launch { listState.animateScrollToItem(messages.lastIndex) } },
+                        modifier = Modifier.align(Alignment.End),
+                    ) { Text(stringResource(R.string.scroll_bottom_button)) }
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(
@@ -357,12 +418,19 @@ fun SessionScreen(
                             input = ""
                             messages += ChatMessage(ChatRole.User, text)
                             busy = true
+                            awaitingResponse = true
                             scope.launch {
                                 runCatching { agentClient.promptAsync(connection.serverUrl, connection.token, activeSessionId, text, selectedModel, activeSession.directory) }
                                     .onFailure {
                                         runCatching { agentClient.sendMessage(connection.serverUrl, connection.token, activeSessionId, text, selectedModel, activeSession.directory) }
-                                            .onSuccess { messages += ChatMessage(ChatRole.Assistant, it) }
-                                            .onFailure { error -> messages += ChatMessage(ChatRole.System, error.message ?: "Send failed") }
+                                            .onSuccess {
+                                                awaitingResponse = false
+                                                messages += ChatMessage(ChatRole.Assistant, it)
+                                            }
+                                            .onFailure { error ->
+                                                awaitingResponse = false
+                                                messages += ChatMessage(ChatRole.System, error.message ?: "Send failed")
+                                            }
                                         busy = false
                                     }
                             }
@@ -371,7 +439,6 @@ fun SessionScreen(
                         Text(
                             when {
                                 busy -> stringResource(R.string.sending_button)
-                                streamActive -> stringResource(R.string.send_button)
                                 else -> stringResource(R.string.send_button)
                             },
                         )
@@ -397,6 +464,11 @@ private fun NaviSheetContent(
     onLoginProvider: () -> Unit,
 ) {
     val templates = promptTemplates()
+    var modelQuery by remember { mutableStateOf("") }
+    val visibleModels = models.filter { model ->
+        modelQuery.isBlank() || model.label.contains(modelQuery, ignoreCase = true) ||
+            model.providerId.contains(modelQuery, ignoreCase = true) || model.modelId.contains(modelQuery, ignoreCase = true)
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -438,7 +510,16 @@ private fun NaviSheetContent(
         }
         if (models.isNotEmpty()) {
             item { NaviSectionTitle(stringResource(R.string.navi_section_models)) }
-            items(models.take(48)) { model ->
+            item {
+                OutlinedTextField(
+                    value = modelQuery,
+                    onValueChange = { modelQuery = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(stringResource(R.string.model_search_label)) },
+                    singleLine = true,
+                )
+            }
+            items(visibleModels.take(64)) { model ->
                 FilterChip(
                     selected = selectedModel?.providerId == model.providerId && selectedModel.modelId == model.modelId,
                     onClick = { onModel(model) },
@@ -476,6 +557,7 @@ private fun NaviSheetContent(
 
 @Composable
 private fun DiffSheetContent(diffFiles: List<DiffFile>) {
+    val clipboard = LocalClipboardManager.current
     LazyColumn(
         modifier = Modifier
             .fillMaxWidth()
@@ -497,9 +579,12 @@ private fun DiffSheetContent(diffFiles: List<DiffFile>) {
                 elevation = 1.dp,
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text(text = file.path, style = MaterialTheme.typography.overline)
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(text = file.path, style = MaterialTheme.typography.overline, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { clipboard.setText(AnnotatedString(file.text)) }) { Text(stringResource(R.string.copy_button)) }
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
-                    MarkdownText(text = "```json\n${file.text}\n```")
+                    MarkdownText(text = "```diff\n${file.text}\n```")
                 }
             }
         }
@@ -591,8 +676,11 @@ private fun promptTemplates() = listOf(
     ),
 )
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun MessageCard(message: ChatMessage) {
+private fun MessageCard(message: ChatMessage, onRetry: (String) -> Unit) {
+    val clipboard = LocalClipboardManager.current
+    var menuExpanded by remember { mutableStateOf(false) }
     val containerColor = when (message.role) {
         ChatRole.User -> MaterialTheme.colors.primary.copy(alpha = 0.12f)
         ChatRole.Assistant -> MaterialTheme.colors.onSurface.copy(alpha = 0.08f)
@@ -609,17 +697,52 @@ private fun MessageCard(message: ChatMessage) {
         backgroundColor = containerColor,
         shape = MaterialTheme.shapes.medium,
         elevation = 1.dp,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = {},
+                onLongClick = { menuExpanded = true },
+            ),
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = title, style = MaterialTheme.typography.button)
-            Spacer(modifier = Modifier.height(6.dp))
-            if (message.role == ChatRole.Assistant) {
-                MarkdownText(text = message.text)
-            } else {
-                Text(text = message.text, style = MaterialTheme.typography.body2)
+        Box {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(text = title, style = MaterialTheme.typography.button)
+                Spacer(modifier = Modifier.height(6.dp))
+                if (message.role == ChatRole.Assistant) {
+                    MarkdownText(text = message.text)
+                } else {
+                    Text(text = message.text, style = MaterialTheme.typography.body2)
+                }
+            }
+            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                DropdownMenuItem(onClick = {
+                    clipboard.setText(AnnotatedString(message.text))
+                    menuExpanded = false
+                }) { Text(stringResource(R.string.copy_message_button)) }
+                if (message.role == ChatRole.User) {
+                    DropdownMenuItem(onClick = {
+                        onRetry(message.text)
+                        menuExpanded = false
+                    }) { Text(stringResource(R.string.retry_prompt_button)) }
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun StatusCard(message: String) {
+    Card(
+        backgroundColor = MaterialTheme.colors.error.copy(alpha = 0.12f),
+        shape = MaterialTheme.shapes.medium,
+        elevation = 1.dp,
+    ) {
+        Text(
+            text = message,
+            modifier = Modifier.padding(12.dp),
+            style = MaterialTheme.typography.body2,
+            color = MaterialTheme.colors.error,
+        )
     }
 }
 
@@ -638,6 +761,19 @@ private fun finalizeAssistantText(messages: MutableList<ChatMessage>, text: Stri
     if (last?.role == ChatRole.Assistant) {
         messages[messages.lastIndex] = last.copy(text = text)
     }
+}
+
+private fun LazyListState.isNearBottom(): Boolean {
+    val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return true
+    return lastVisible >= layoutInfo.totalItemsCount - 2
+}
+
+private fun StreamStatus.label(): String = when (this) {
+    StreamStatus.Connecting -> "Connecting"
+    StreamStatus.Connected -> "Connected"
+    StreamStatus.Reconnecting -> "Reconnecting"
+    StreamStatus.Disconnected -> "Disconnected"
+    StreamStatus.Error -> "Stream error"
 }
 
 private fun OpenCodeMessage.toChatMessage(): ChatMessage {
