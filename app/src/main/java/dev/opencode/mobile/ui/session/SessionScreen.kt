@@ -120,6 +120,7 @@ fun SessionScreen(
     var streamError by remember { mutableStateOf<String?>(null) }
     var awaitingResponse by remember { mutableStateOf(false) }
     var waitingSinceMs by remember { mutableStateOf<Long?>(null) }
+    var liveThinking by remember { mutableStateOf("") }
     var diffFiles by remember { mutableStateOf<List<DiffFile>>(emptyList()) }
     var pendingPermission by remember { mutableStateOf<OpenCodeStreamEvent.Permission?>(null) }
     val listState = rememberLazyListState()
@@ -194,23 +195,30 @@ fun SessionScreen(
                                 is OpenCodeStreamEvent.TextDelta -> {
                                     awaitingResponse = false
                                     waitingSinceMs = null
+                                    liveThinking = ""
                                     appendAssistantDelta(messages, event.delta)
                                 }
                                 is OpenCodeStreamEvent.TextEnded -> {
                                     awaitingResponse = false
                                     waitingSinceMs = null
+                                    liveThinking = ""
                                     finalizeAssistantText(messages, event.text)
                                 }
-                                is OpenCodeStreamEvent.Tool -> messages += ChatMessage(ChatRole.Tool, event.title)
+                                is OpenCodeStreamEvent.Tool -> {
+                                    liveThinking = event.title
+                                    messages += ChatMessage(ChatRole.Tool, event.title)
+                                }
                                 is OpenCodeStreamEvent.Error -> {
                                     awaitingResponse = false
                                     waitingSinceMs = null
+                                    liveThinking = ""
                                     messages += ChatMessage(ChatRole.System, event.message)
                                 }
                                 is OpenCodeStreamEvent.Idle -> {
                                     busy = false
                                     awaitingResponse = false
                                     waitingSinceMs = null
+                                    liveThinking = ""
                                 }
                                 is OpenCodeStreamEvent.Permission -> pendingPermission = event
                             }
@@ -441,6 +449,7 @@ fun SessionScreen(
                             WorkingMessageCard(
                                 streamStatus = streamStatus,
                                 waitingSinceMs = waitingSinceMs,
+                                liveThinking = liveThinking,
                             )
                         }
                     }
@@ -802,11 +811,11 @@ private fun MessageCard(message: ChatMessage, onRetry: (String) -> Unit) {
     val clipboard = LocalClipboardManager.current
     var menuExpanded by remember { mutableStateOf(false) }
     val containerColor = when (message.role) {
-        ChatRole.User -> MaterialTheme.colors.primary.copy(alpha = 0.12f)
-        ChatRole.Assistant -> MaterialTheme.colors.onSurface.copy(alpha = 0.08f)
-        ChatRole.System -> MaterialTheme.colors.secondary.copy(alpha = 0.12f)
-        ChatRole.Tool -> MaterialTheme.colors.secondary.copy(alpha = 0.08f)
-        ChatRole.Working -> MaterialTheme.adventure.accent.copy(alpha = 0.18f)
+        ChatRole.User -> MaterialTheme.colors.primary
+        ChatRole.Assistant -> MaterialTheme.colors.surface
+        ChatRole.System -> MaterialTheme.colors.secondary.copy(alpha = 0.10f)
+        ChatRole.Tool -> MaterialTheme.adventure.surface2
+        ChatRole.Working -> MaterialTheme.adventure.infoContainer
     }
     val title = when (message.role) {
         ChatRole.User -> stringResource(R.string.role_user)
@@ -817,7 +826,8 @@ private fun MessageCard(message: ChatMessage, onRetry: (String) -> Unit) {
     }
     AdventureCard(
         backgroundColor = containerColor,
-        elevation = 2.dp,
+        contentColor = if (message.role == ChatRole.User) MaterialTheme.colors.onPrimary else MaterialTheme.colors.onSurface,
+        elevation = if (message.role == ChatRole.User) 2.dp else 1.dp,
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(
@@ -826,23 +836,12 @@ private fun MessageCard(message: ChatMessage, onRetry: (String) -> Unit) {
             ),
     ) {
         Box {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                AdventurePill(
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
                     text = title,
-                    backgroundColor = when (message.role) {
-                        ChatRole.User -> MaterialTheme.colors.primary.copy(alpha = 0.16f)
-                        ChatRole.Assistant -> MaterialTheme.adventure.secondary.copy(alpha = 0.14f)
-                        ChatRole.System -> MaterialTheme.adventure.infoContainer
-                        ChatRole.Tool -> MaterialTheme.adventure.surface2
-                        ChatRole.Working -> MaterialTheme.adventure.accent.copy(alpha = 0.18f)
-                    },
-                    contentColor = when (message.role) {
-                        ChatRole.User -> MaterialTheme.colors.primary
-                        ChatRole.Assistant -> MaterialTheme.adventure.secondary
-                        ChatRole.System -> MaterialTheme.adventure.info
-                        ChatRole.Tool -> MaterialTheme.adventure.textMedium
-                        ChatRole.Working -> MaterialTheme.adventure.accent
-                    },
+                    style = MaterialTheme.typography.caption,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (message.role == ChatRole.User) MaterialTheme.colors.onPrimary.copy(alpha = 0.82f) else MaterialTheme.adventure.textMedium,
                 )
                 if (message.role == ChatRole.Assistant) {
                     MarkdownText(text = message.text)
@@ -854,7 +853,7 @@ private fun MessageCard(message: ChatMessage, onRetry: (String) -> Unit) {
                         color = MaterialTheme.colors.onSurface.copy(alpha = 0.8f),
                     )
                 } else {
-                    Text(text = message.text, style = MaterialTheme.typography.body2)
+                    Text(text = message.text, style = MaterialTheme.typography.body2, color = if (message.role == ChatRole.User) MaterialTheme.colors.onPrimary else MaterialTheme.colors.onSurface)
                 }
             }
             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
@@ -874,7 +873,7 @@ private fun MessageCard(message: ChatMessage, onRetry: (String) -> Unit) {
 }
 
 @Composable
-private fun WorkingMessageCard(streamStatus: StreamStatus, waitingSinceMs: Long?) {
+private fun WorkingMessageCard(streamStatus: StreamStatus, waitingSinceMs: Long?, liveThinking: String) {
     val elapsed = waitingSinceMs?.let { ((System.currentTimeMillis() - it) / 1000).coerceAtLeast(0) }
     AdventureCard(
         modifier = Modifier.fillMaxWidth(),
@@ -892,6 +891,12 @@ private fun WorkingMessageCard(streamStatus: StreamStatus, waitingSinceMs: Long?
                 color = MaterialTheme.adventure.accent,
             )
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            Text(
+                text = if (liveThinking.isNotBlank()) liveThinking else "Waiting for the first streamed token…",
+                style = MaterialTheme.typography.body2,
+                color = MaterialTheme.colors.onSurface.copy(alpha = 0.82f),
+                fontFamily = if (liveThinking.isNotBlank()) FontFamily.Monospace else null,
+            )
             Text(
                 text = if (elapsed != null) {
                     "Prompt accepted · ${streamStatus.label()} · ${elapsed}s"

@@ -207,7 +207,7 @@ class AgentClient(
             val source = response.body?.source() ?: throw IOException("Missing event stream body")
             var eventName: String? = null
             val data = StringBuilder()
-            while (!source.exhausted()) {
+            while (true) {
                 val line = source.readUtf8Line() ?: break
                 when {
                     line.startsWith("event:") -> eventName = line.removePrefix("event:").trim()
