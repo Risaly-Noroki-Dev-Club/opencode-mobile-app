@@ -19,4 +19,24 @@
     <string name="role_user">You</string>
     <string name="role_assistant">OpenCode</string>
     <string name="role_system">System</string>
+    <string name="model_default">Default model</string>
+    <string name="navi_title">navi</string>
+    <string name="navi_button">navi</string>
+    <string name="navi_subtitle">Commands, models, and shortcuts in one place.</string>
+    <string name="navi_section_templates">Templates</string>
+    <string name="navi_section_opencode">OpenCode</string>
+    <string name="navi_section_models">Models</string>
+    <string name="navi_native_command">Native OpenCode command</string>
+    <string name="template_review_title">Review changes</string>
+    <string name="template_review_description">Find bugs, risks, and missing tests.</string>
+    <string name="template_review_prompt">Review the current changes. Focus on bugs, behavioral regressions, risks, and missing tests.</string>
+    <string name="template_test_title">Run tests</string>
+    <string name="template_test_description">Run the relevant tests and explain failures.</string>
+    <string name="template_test_prompt">Run the relevant tests for this project. If anything fails, diagnose the root cause and propose the smallest fix.</string>
+    <string name="template_diff_title">Summarize diff</string>
+    <string name="template_diff_description">Explain what changed and what to verify.</string>
+    <string name="template_diff_prompt">Inspect the current Git diff. Summarize the changes, call out risks, and suggest verification steps.</string>
+    <string name="template_explain_title">Explain project</string>
+    <string name="template_explain_description">Map the structure and important entry points.</string>
+    <string name="template_explain_prompt">Explain this project structure, key entry points, and how to run or verify it.</string>
 </resources>

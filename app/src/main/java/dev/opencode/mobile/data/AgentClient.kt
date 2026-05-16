@@ -2,8 +2,17 @@ package dev.opencode.mobile.data
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -45,16 +54,97 @@ class AgentClient(
     }
 
     suspend fun sendMessage(serverUrl: String, token: String, sessionId: String, text: String): String = withContext(Dispatchers.IO) {
-        val escaped = json.encodeToString(kotlinx.serialization.serializer<String>(), text)
+        sendMessage(serverUrl, token, sessionId, text, null)
+    }
+
+    suspend fun sendMessage(
+        serverUrl: String,
+        token: String,
+        sessionId: String,
+        text: String,
+        model: ModelOption?,
+    ): String = withContext(Dispatchers.IO) {
+        val body = buildJsonObject {
+            if (model != null) {
+                put("model", buildJsonObject {
+                    put("providerID", model.providerId)
+                    put("modelID", model.modelId)
+                })
+            }
+            put("parts", JsonArray(listOf(buildJsonObject {
+                put("type", "text")
+                put("text", text)
+            })))
+        }
         val response = postJson<MessageResponse>(
             url = "${serverUrl.trim().trimEnd('/')}/opencode/session/$sessionId/message",
             token = token,
-            body = """{"parts":[{"type":"text","text":$escaped}]}""",
+            body = json.encodeToString(body),
         )
         response.parts
             .filter { it.type == "text" }
             .joinToString(separator = "\n") { it.text.orEmpty() }
             .ifBlank { "(No text response)" }
+    }
+
+    suspend fun executeCommand(
+        serverUrl: String,
+        token: String,
+        sessionId: String,
+        command: String,
+        arguments: String,
+        model: ModelOption?,
+    ): String = withContext(Dispatchers.IO) {
+        val body = buildJsonObject {
+            put("command", command)
+            put("arguments", arguments)
+            if (model != null) {
+                put("model", buildJsonObject {
+                    put("providerID", model.providerId)
+                    put("modelID", model.modelId)
+                })
+            }
+        }
+        val response = postJsonOrNull<MessageResponse>(
+            url = "${serverUrl.trim().trimEnd('/')}/opencode/session/$sessionId/command",
+            token = token,
+            body = json.encodeToString(body),
+        )
+        response?.parts
+            ?.filter { it.type == "text" }
+            ?.joinToString(separator = "\n") { it.text.orEmpty() }
+            ?.ifBlank { "Command sent: /$command" }
+            ?: "Command sent: /$command"
+    }
+
+    suspend fun listCommands(serverUrl: String, token: String): List<OpenCodeCommand> = withContext(Dispatchers.IO) {
+        getJson<List<OpenCodeCommand>>("${serverUrl.trim().trimEnd('/')}/opencode/command", tokenRequired = true, token = token)
+    }
+
+    suspend fun listModels(serverUrl: String, token: String): List<ModelOption> = withContext(Dispatchers.IO) {
+        val root = getJson<JsonElement>("${serverUrl.trim().trimEnd('/')}/opencode/provider", tokenRequired = true, token = token)
+        val providers = when (root) {
+            is JsonArray -> root
+            is JsonObject -> (root["all"] ?: root["providers"]) as? JsonArray ?: JsonArray(emptyList())
+            else -> JsonArray(emptyList())
+        }
+
+        providers.flatMap { providerElement ->
+            val provider = providerElement.jsonObject
+            val providerId = provider["id"]?.jsonPrimitive?.contentOrNull.orEmpty()
+            val providerName = provider["name"]?.jsonPrimitive?.contentOrNull ?: providerId
+            val models = provider["models"]?.jsonObject ?: return@flatMap emptyList()
+            models.values.mapNotNull { modelElement ->
+                val model = modelElement.jsonObject
+                val modelId = model["id"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+                ModelOption(
+                    providerId = providerId,
+                    providerName = providerName,
+                    modelId = modelId,
+                    modelName = model["name"]?.jsonPrimitive?.contentOrNull ?: modelId,
+                )
+            }
+        }.sortedWith(compareBy<ModelOption> { it.providerName }.thenBy { it.modelName })
     }
 
     private inline fun <reified T> getJson(url: String, tokenRequired: Boolean, token: String): T {
@@ -80,6 +170,36 @@ class AgentClient(
             return json.decodeFromString<T>(responseBody)
         }
     }
+
+    private inline fun <reified T> postJsonOrNull(url: String, token: String, body: String): T? {
+        val request = Request.Builder()
+            .url(url)
+            .header("Authorization", "Bearer $token")
+            .header("Content-Type", "application/json")
+            .post(body.toRequestBody(jsonMediaType))
+            .build()
+        httpClient.newCall(request).execute().use { response ->
+            val responseBody = response.body?.string().orEmpty()
+            if (!response.isSuccessful) throw IOException("HTTP ${response.code}: $responseBody")
+            if (responseBody.isBlank()) return null
+            return json.decodeFromString<T>(responseBody)
+        }
+    }
+}
+
+@Serializable
+data class OpenCodeCommand(
+    val name: String,
+    val description: String? = null,
+)
+
+data class ModelOption(
+    val providerId: String,
+    val providerName: String,
+    val modelId: String,
+    val modelName: String,
+) {
+    val label: String = "$providerName / $modelName"
 }
 
 sealed interface ConnectionResult {

@@ -19,24 +19,31 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.R
 import dev.opencode.mobile.data.AgentClient
 import dev.opencode.mobile.data.ConnectionResult
+import dev.opencode.mobile.data.SettingsStore
 import dev.opencode.mobile.ui.session.ChatConnection
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConnectScreen(onConnected: (ChatConnection) -> Unit) {
+    val context = LocalContext.current
+    val settingsStore = remember { SettingsStore(context) }
+    val savedConnection by settingsStore.connection.collectAsState(initial = null)
     val serverUrlPlaceholder = stringResource(R.string.server_url_placeholder)
     val connectionFailed = stringResource(R.string.connection_failed)
     var serverUrl by remember { mutableStateOf(serverUrlPlaceholder) }
@@ -45,6 +52,12 @@ fun ConnectScreen(onConnected: (ChatConnection) -> Unit) {
     var result by remember { mutableStateOf<ConnectionResult?>(null) }
     val agentClient = remember { AgentClient() }
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(savedConnection) {
+        val saved = savedConnection ?: return@LaunchedEffect
+        if (saved.serverUrl.isNotBlank()) serverUrl = saved.serverUrl
+        if (saved.token.isNotBlank()) token = saved.token
+    }
 
     Scaffold(
         topBar = {
@@ -104,7 +117,9 @@ fun ConnectScreen(onConnected: (ChatConnection) -> Unit) {
                                 val connectionResult = agentClient.checkConnection(serverUrl, token)
                                 result = connectionResult
                                 if (connectionResult is ConnectionResult.Success) {
-                                    onConnected(ChatConnection(serverUrl.trim().trimEnd('/'), token))
+                                    val normalizedServerUrl = serverUrl.trim().trimEnd('/')
+                                    settingsStore.saveConnection(normalizedServerUrl, token)
+                                    onConnected(ChatConnection(normalizedServerUrl, token))
                                 }
                                 isConnecting = false
                             }

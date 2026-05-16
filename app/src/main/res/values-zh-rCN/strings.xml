@@ -19,4 +19,24 @@
     <string name="role_user">你</string>
     <string name="role_assistant">OpenCode</string>
     <string name="role_system">系统</string>
+    <string name="model_default">默认模型</string>
+    <string name="navi_title">navi</string>
+    <string name="navi_button">navi</string>
+    <string name="navi_subtitle">命令、模型和快捷操作都在这里。</string>
+    <string name="navi_section_templates">模板</string>
+    <string name="navi_section_opencode">OpenCode</string>
+    <string name="navi_section_models">模型</string>
+    <string name="navi_native_command">OpenCode 原生命令</string>
+    <string name="template_review_title">审查改动</string>
+    <string name="template_review_description">找出 bug、风险和缺少的测试。</string>
+    <string name="template_review_prompt">请审查当前改动，重点指出 bug、行为回归、风险和缺少的测试。</string>
+    <string name="template_test_title">运行测试</string>
+    <string name="template_test_description">运行相关测试并解释失败原因。</string>
+    <string name="template_test_prompt">请运行这个项目的相关测试。如果有失败，请诊断根因并提出最小修复方案。</string>
+    <string name="template_diff_title">总结 Diff</string>
+    <string name="template_diff_description">说明改了什么以及需要验证什么。</string>
+    <string name="template_diff_prompt">请查看当前 Git diff，总结改动内容、潜在风险和建议验证步骤。</string>
+    <string name="template_explain_title">解释项目</string>
+    <string name="template_explain_description">梳理结构和关键入口。</string>
+    <string name="template_explain_prompt">请解释这个项目的结构、关键入口，以及如何运行或验证它。</string>
 </resources>
