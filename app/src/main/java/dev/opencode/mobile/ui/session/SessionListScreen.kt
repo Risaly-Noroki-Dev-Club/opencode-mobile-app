@@ -125,7 +125,7 @@ fun SessionListScreen(
                         Text(
                             project.worktree,
                             style = MaterialTheme.typography.overline,
-                            color = MaterialTheme.adventure.textMedium,
+                            color = MaterialTheme.colors.onPrimary.copy(alpha = 0.82f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )

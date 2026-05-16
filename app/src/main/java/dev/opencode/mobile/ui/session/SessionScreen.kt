@@ -74,6 +74,7 @@ import dev.opencode.mobile.ui.theme.AdventureTextButton
 import dev.opencode.mobile.ui.theme.AdventureTopAppBar
 import dev.opencode.mobile.ui.theme.adventure
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -121,6 +122,7 @@ fun SessionScreen(
     var awaitingResponse by remember { mutableStateOf(false) }
     var waitingSinceMs by remember { mutableStateOf<Long?>(null) }
     var liveThinking by remember { mutableStateOf("") }
+    var refreshJob by remember { mutableStateOf<Job?>(null) }
     var diffFiles by remember { mutableStateOf<List<DiffFile>>(emptyList()) }
     var pendingPermission by remember { mutableStateOf<OpenCodeStreamEvent.Permission?>(null) }
     val listState = rememberLazyListState()
@@ -193,12 +195,14 @@ fun SessionScreen(
                             reconnectDelayMs = 1000L
                             when (event) {
                                 is OpenCodeStreamEvent.TextDelta -> {
+                                    refreshJob?.cancel()
                                     awaitingResponse = false
                                     waitingSinceMs = null
                                     liveThinking = ""
                                     appendAssistantDelta(messages, event.delta)
                                 }
                                 is OpenCodeStreamEvent.TextEnded -> {
+                                    refreshJob?.cancel()
                                     awaitingResponse = false
                                     waitingSinceMs = null
                                     liveThinking = ""
@@ -400,7 +404,7 @@ fun SessionScreen(
                             Text(
                                 text = "${streamStatus.label()} · ${selectedModel?.label ?: activeSession.directory ?: stringResource(R.string.model_default)}",
                                 style = MaterialTheme.typography.overline,
-                                color = MaterialTheme.adventure.textMedium,
+                                color = MaterialTheme.colors.onPrimary.copy(alpha = 0.82f),
                             )
                         }
                     },
@@ -499,16 +503,43 @@ fun SessionScreen(
                             busy = true
                             awaitingResponse = true
                             waitingSinceMs = System.currentTimeMillis()
+                            refreshJob?.cancel()
+                            refreshJob = scope.launch {
+                                var lastText = ""
+                                repeat(90) {
+                                    delay(1000L)
+                                    val history = runCatching {
+                                        agentClient.listMessages(connection.serverUrl, connection.token, activeSessionId, activeSession.directory)
+                                    }.getOrNull().orEmpty()
+                                    val assistantText = history.lastOrNull { it.role == "assistant" }?.text.orEmpty()
+                                    if (assistantText.isNotBlank() && assistantText != lastText) {
+                                        lastText = assistantText
+                                        val existingAssistant = messages.indexOfLast { it.role == ChatRole.Assistant }
+                                        if (existingAssistant >= 0 && messages[existingAssistant].text != assistantText) {
+                                            messages[existingAssistant] = messages[existingAssistant].copy(text = assistantText)
+                                        } else if (existingAssistant < 0) {
+                                            messages += ChatMessage(ChatRole.Assistant, assistantText)
+                                        }
+                                        awaitingResponse = false
+                                        waitingSinceMs = null
+                                        liveThinking = ""
+                                    } else if (awaitingResponse) {
+                                        liveThinking = "Waiting for opencode output… ${it + 1}s"
+                                    }
+                                }
+                            }
                             scope.launch {
                                 runCatching { agentClient.promptAsync(connection.serverUrl, connection.token, activeSessionId, text, selectedModel, activeSession.directory) }
                                     .onFailure {
                                         runCatching { agentClient.sendMessage(connection.serverUrl, connection.token, activeSessionId, text, selectedModel, activeSession.directory) }
                                             .onSuccess {
+                                                refreshJob?.cancel()
                                                 awaitingResponse = false
                                                 waitingSinceMs = null
                                                 messages += ChatMessage(ChatRole.Assistant, it)
                                             }
                                             .onFailure { error ->
+                                                refreshJob?.cancel()
                                                 awaitingResponse = false
                                                 waitingSinceMs = null
                                                 messages += ChatMessage(ChatRole.System, error.message ?: "Send failed")

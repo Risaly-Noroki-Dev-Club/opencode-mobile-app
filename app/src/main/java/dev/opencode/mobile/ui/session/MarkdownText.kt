@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.Divider
 import androidx.compose.material.MaterialTheme
+import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.material.TextButton
 import androidx.compose.runtime.Composable
@@ -58,10 +60,55 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier) {
                         Text(text = item.renderedText, style = MaterialTheme.typography.body2)
                     }
                 }
+                is MarkdownBlock.Table -> TableBlock(block)
                 is MarkdownBlock.Paragraph -> Text(text = inlineMarkdown(block.text), style = MaterialTheme.typography.body2)
             }
         }
     }
+}
+
+@Composable
+private fun TableBlock(table: MarkdownBlock.Table) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .clip(RoundedCornerShape(4.dp))
+            .background(MaterialTheme.colors.surface),
+    ) {
+        Row(modifier = Modifier.background(MaterialTheme.colors.primary.copy(alpha = 0.10f))) {
+            table.headers.forEach { cell ->
+                TableCell(cell, header = true)
+            }
+        }
+        Divider(color = MaterialTheme.colors.onSurface.copy(alpha = 0.12f))
+        table.rows.forEachIndexed { index, row ->
+            Row(modifier = Modifier.background(if (index % 2 == 0) Color.Transparent else MaterialTheme.colors.onSurface.copy(alpha = 0.035f))) {
+                normalizedRow(row, table.headers.size).forEach { cell ->
+                    TableCell(cell, header = false)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TableCell(text: String, header: Boolean) {
+    Surface(color = Color.Transparent, modifier = Modifier.padding(horizontal = 1.dp)) {
+        Text(
+            text = inlineMarkdown(text.trim()),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            style = if (header) MaterialTheme.typography.caption else MaterialTheme.typography.body2,
+            fontWeight = if (header) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (header) MaterialTheme.colors.primary else MaterialTheme.colors.onSurface,
+        )
+    }
+}
+
+private fun normalizedRow(row: List<String>, size: Int): List<String> = when {
+    row.size == size -> row
+    row.size > size -> row.take(size)
+    else -> row + List(size - row.size) { "" }
 }
 
 @Composable
@@ -122,6 +169,7 @@ private sealed interface MarkdownBlock {
     data class ListItems(val items: List<ListItem>) : MarkdownBlock
     data class Quote(val text: String) : MarkdownBlock
     data class Code(val code: String, val language: String?, val closed: Boolean) : MarkdownBlock
+    data class Table(val headers: List<String>, val rows: List<List<String>>) : MarkdownBlock
 }
 
 private data class ListItem(val marker: String, val text: String) {
@@ -133,6 +181,8 @@ private fun parseMarkdownBlocks(text: String): List<MarkdownBlock> {
     val paragraph = mutableListOf<String>()
     val listItems = mutableListOf<ListItem>()
     val quote = mutableListOf<String>()
+    var pendingTableHeader: List<String>? = null
+    val tableRows = mutableListOf<List<String>>()
     var inCode = false
     var codeLanguage: String? = null
     val code = StringBuilder()
@@ -155,7 +205,18 @@ private fun parseMarkdownBlocks(text: String): List<MarkdownBlock> {
             quote.clear()
         }
     }
+    fun flushTable() {
+        val header = pendingTableHeader
+        if (header != null && tableRows.isNotEmpty()) {
+            blocks += MarkdownBlock.Table(header, tableRows.toList())
+        } else if (header != null) {
+            paragraph += renderPipeRow(header)
+        }
+        pendingTableHeader = null
+        tableRows.clear()
+    }
     fun flushInline() {
+        flushTable()
         flushParagraph()
         flushList()
         flushQuote()
@@ -180,6 +241,24 @@ private fun parseMarkdownBlocks(text: String): List<MarkdownBlock> {
         if (inCode) {
             code.appendLine(line)
             return@forEach
+        }
+
+        val pipeCells = parsePipeRow(line)
+        if (pipeCells != null) {
+            val header = pendingTableHeader
+            when {
+                header == null -> {
+                    flushParagraph()
+                    flushList()
+                    flushQuote()
+                    pendingTableHeader = pipeCells
+                }
+                isTableSeparator(pipeCells) -> Unit
+                else -> tableRows += pipeCells
+            }
+            return@forEach
+        } else if (pendingTableHeader != null) {
+            flushTable()
         }
 
         if (line.isBlank()) {
@@ -217,6 +296,20 @@ private fun parseMarkdownBlocks(text: String): List<MarkdownBlock> {
     flushInline()
     return blocks.ifEmpty { listOf(MarkdownBlock.Paragraph(text)) }
 }
+
+private fun parsePipeRow(line: String): List<String>? {
+    val trimmed = line.trim()
+    if (!trimmed.contains('|')) return null
+    val raw = trimmed.trim('|').split('|').map { it.trim() }
+    if (raw.size < 2 || raw.all { it.isBlank() }) return null
+    return raw
+}
+
+private fun isTableSeparator(cells: List<String>): Boolean = cells.all { cell ->
+    cell.replace(":", "").all { it == '-' } && cell.count { it == '-' } >= 3
+}
+
+private fun renderPipeRow(cells: List<String>): String = cells.joinToString(" | ")
 
 private fun parseListItem(line: String): ListItem? {
     if (line.startsWith("- ") || line.startsWith("* ")) return ListItem("•", line.drop(2))

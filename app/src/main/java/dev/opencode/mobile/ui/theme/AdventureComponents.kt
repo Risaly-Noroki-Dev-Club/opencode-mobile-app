@@ -23,6 +23,8 @@ import androidx.compose.material.Text
 import androidx.compose.material.TextButton
 import androidx.compose.material.TextFieldColors
 import androidx.compose.material.TextFieldDefaults
+import androidx.compose.material.LocalContentColor
+import androidx.compose.material.ProvideTextStyle
 import androidx.compose.material.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -51,7 +53,13 @@ fun AdventureTopAppBar(
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     TopAppBar(
-        title = title,
+        title = {
+            androidx.compose.runtime.CompositionLocalProvider(LocalContentColor provides MaterialTheme.colors.onPrimary) {
+                ProvideTextStyle(MaterialTheme.typography.h6.copy(color = MaterialTheme.colors.onPrimary)) {
+                    title()
+                }
+            }
+        },
         modifier = modifier.statusBarsPadding(),
         navigationIcon = navigationIcon,
         actions = actions,
