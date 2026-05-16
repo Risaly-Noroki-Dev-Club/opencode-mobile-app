@@ -10,15 +10,20 @@ https://github.com/Risaly-Noroki-Dev-Club/opencode-mobile-agent
 
 ## 当前状态
 
-项目还处于早期测试阶段。当前 APK 主要用于验证：
+项目已进入可用 MVP 阶段。当前 APK 主要支持：
 
-- 原生 Android 工程结构
-- Material 3 主题
-- Android 12+ 动态取色
-- 中文/英文资源切换
-- 连接页 UI 骨架
+- 连接 `opencode-mobile-agent`
+- 读取 agent `/health` 状态
+- 读取 `/projects` 项目列表
+- 按项目读取 `/sessions` 历史会话
+- 在选中项目目录下新建 OpenCode 会话
+- 打开已有会话并继续聊天
+- 通过 `/opencode/event` 接收 SSE 流式输出
+- 权限审批弹窗
+- 会话 Diff 查看器
+- navi 命令/模板/模型选择面板
 
-实际连接、会话、权限审批、diff 查看等功能会在后续版本继续实现。
+当前仍是 debug 测试构建，尚未做正式发布、账号体系或多服务器管理。
 
 ## 技术栈
 
@@ -27,7 +32,7 @@ https://github.com/Risaly-Noroki-Dev-Club/opencode-mobile-agent
 - Material 3
 - Material 3 Expressive，后续在依赖稳定后逐步接入
 - Android 12+ Dynamic Color
-- OkHttp HTTP/WebSocket
+- OkHttp HTTP/SSE
 - Kotlin Serialization
 - DataStore
 - Navigation Compose
@@ -44,11 +49,11 @@ https://github.com/Risaly-Noroki-Dev-Club/opencode-mobile-agent
 ## 计划页面
 
 - 连接页
-- Workspace 列表
-- Session 列表
-- 会话时间线
-- 权限审批弹窗
-- Diff 查看器
+- 多服务器管理
+- Session 搜索
+- Session 删除/重命名
+- 更完整的会话时间线
+- Release 签名和发布流程
 
 ## 构建
 

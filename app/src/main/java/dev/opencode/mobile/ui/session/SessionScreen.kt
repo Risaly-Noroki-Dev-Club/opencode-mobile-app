@@ -45,14 +45,11 @@ import dev.opencode.mobile.data.OpenCodeMessage
 import dev.opencode.mobile.data.OpenCodeCommand
 import dev.opencode.mobile.data.OpenCodeStreamEvent
 import dev.opencode.mobile.data.PermissionReply
+import dev.opencode.mobile.ui.ActiveSession
+import dev.opencode.mobile.ui.ServerConnection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-data class ChatConnection(
-    val serverUrl: String,
-    val token: String,
-)
 
 private data class ChatMessage(
     val role: ChatRole,
@@ -63,11 +60,15 @@ private enum class ChatRole { User, Assistant, System, Tool }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SessionScreen(connection: ChatConnection) {
+fun SessionScreen(
+    connection: ServerConnection,
+    activeSession: ActiveSession,
+    onBack: () -> Unit,
+) {
     val agentClient = remember { AgentClient() }
     val scope = rememberCoroutineScope()
     val messages = remember { mutableStateListOf<ChatMessage>() }
-    var sessionId by remember { mutableStateOf<String?>(null) }
+    var sessionId by remember { mutableStateOf<String?>(activeSession.id) }
     var input by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var showNavi by remember { mutableStateOf(false) }
@@ -79,22 +80,20 @@ fun SessionScreen(connection: ChatConnection) {
     var diffFiles by remember { mutableStateOf<List<DiffFile>>(emptyList()) }
     var pendingPermission by remember { mutableStateOf<OpenCodeStreamEvent.Permission?>(null) }
 
-    LaunchedEffect(connection) {
+    LaunchedEffect(connection, activeSession.id) {
         busy = true
-        runCatching { agentClient.createSession(connection.serverUrl, connection.token) }
-            .onSuccess {
-                sessionId = it
-                messages += ChatMessage(ChatRole.System, "${connection.serverUrl}\n${it}")
-                runCatching { agentClient.listMessages(connection.serverUrl, connection.token, it) }
-                    .onSuccess { history ->
-                        if (history.isNotEmpty()) {
-                            messages.clear()
-                            messages += history.map { message -> message.toChatMessage() }
-                        }
-                    }
+        sessionId = activeSession.id
+        messages.clear()
+        messages += ChatMessage(ChatRole.System, "${connection.serverUrl}\n${activeSession.directory.orEmpty()}\n${activeSession.id}")
+        runCatching { agentClient.listMessages(connection.serverUrl, connection.token, activeSession.id, activeSession.directory) }
+            .onSuccess { history ->
+                if (history.isNotEmpty()) {
+                    messages.clear()
+                    messages += history.map { message -> message.toChatMessage() }
+                }
             }
             .onFailure {
-                messages += ChatMessage(ChatRole.System, it.message ?: "Failed to create session")
+                messages += ChatMessage(ChatRole.System, it.message ?: "Failed to load session")
             }
         busy = false
 
@@ -138,13 +137,16 @@ fun SessionScreen(connection: ChatConnection) {
             TopAppBar(
                 title = {
                     Column {
-                        Text(stringResource(R.string.session_title))
+                        Text(activeSession.title?.ifBlank { stringResource(R.string.session_title) } ?: stringResource(R.string.session_title))
                         Text(
-                            text = selectedModel?.label ?: stringResource(R.string.model_default),
+                            text = selectedModel?.label ?: activeSession.directory ?: stringResource(R.string.model_default),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                },
+                navigationIcon = {
+                    TextButton(onClick = onBack) { Text(stringResource(R.string.back_button)) }
                 },
                 actions = {
                     TextButton(onClick = { showNavi = true }) {
@@ -197,14 +199,14 @@ fun SessionScreen(connection: ChatConnection) {
                     enabled = !busy && sessionId != null && input.isNotBlank(),
                     onClick = {
                         val text = input.trim()
-                        val activeSession = sessionId ?: return@Button
+                        val activeSessionId = sessionId ?: return@Button
                         input = ""
                         messages += ChatMessage(ChatRole.User, text)
                         busy = true
                         scope.launch {
-                            runCatching { agentClient.promptAsync(connection.serverUrl, connection.token, activeSession, text, selectedModel) }
+                            runCatching { agentClient.promptAsync(connection.serverUrl, connection.token, activeSessionId, text, selectedModel, activeSession.directory) }
                                 .onFailure {
-                                    runCatching { agentClient.sendMessage(connection.serverUrl, connection.token, activeSession, text, selectedModel) }
+                                    runCatching { agentClient.sendMessage(connection.serverUrl, connection.token, activeSessionId, text, selectedModel, activeSession.directory) }
                                         .onSuccess { messages += ChatMessage(ChatRole.Assistant, it) }
                                         .onFailure { error -> messages += ChatMessage(ChatRole.System, error.message ?: "Send failed") }
                                     busy = false
@@ -235,7 +237,7 @@ fun SessionScreen(connection: ChatConnection) {
                 showNavi = false
             },
             onCommand = { command ->
-                val activeSession = sessionId ?: return@NaviSheet
+                val activeSessionId = sessionId ?: return@NaviSheet
                 showNavi = false
                 busy = true
                 messages += ChatMessage(ChatRole.User, "/${command.name}")
@@ -244,10 +246,11 @@ fun SessionScreen(connection: ChatConnection) {
                         agentClient.executeCommand(
                             serverUrl = connection.serverUrl,
                             token = connection.token,
-                            sessionId = activeSession,
+                            sessionId = activeSessionId,
                             command = command.name,
                             arguments = "",
                             model = selectedModel,
+                            directory = activeSession.directory,
                         )
                     }.onSuccess { messages += ChatMessage(ChatRole.Assistant, it) }
                         .onFailure { messages += ChatMessage(ChatRole.System, it.message ?: "Command failed") }
@@ -260,10 +263,10 @@ fun SessionScreen(connection: ChatConnection) {
                 showNavi = false
             },
             onDiff = {
-                val activeSession = sessionId ?: return@NaviSheet
+                val activeSessionId = sessionId ?: return@NaviSheet
                 showNavi = false
                 scope.launch {
-                    runCatching { agentClient.getSessionDiff(connection.serverUrl, connection.token, activeSession) }
+                    runCatching { agentClient.getSessionDiff(connection.serverUrl, connection.token, activeSessionId, activeSession.directory) }
                         .onSuccess {
                             diffFiles = it
                             showDiff = true

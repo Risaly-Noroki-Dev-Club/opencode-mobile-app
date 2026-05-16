@@ -9,7 +9,7 @@
     <string name="connect_button">连接</string>
     <string name="connecting_button">连接中…</string>
     <string name="connection_failed">连接失败</string>
-    <string name="connection_success">已连接。Workspace 数量：%1$d。%2$s</string>
+    <string name="connection_success">已连接。项目数量：%1$d。来源：%2$s。%3$s</string>
     <string name="upstream_ok">OpenCode 可以访问。</string>
     <string name="upstream_unavailable">暂时无法访问 OpenCode：%1$s</string>
     <string name="session_title">OpenCode 会话</string>
@@ -50,4 +50,16 @@
     <string name="template_explain_description">梳理结构和关键入口。</string>
     <string name="template_explain_prompt">请解释这个项目的结构、关键入口，以及如何运行或验证它。</string>
     <string name="history_loaded">历史消息已加载</string>
+    <string name="projects_title">项目</string>
+    <string name="projects_empty">没有可见项目。请检查 agent 的工作区 allowlist。</string>
+    <string name="sessions_empty">这个项目还没有会话。</string>
+    <string name="refresh_button">刷新</string>
+    <string name="disconnect_button">断开</string>
+    <string name="back_button">返回</string>
+    <string name="new_session_button">在此项目中新建会话</string>
+    <string name="creating_session_button">正在创建会话…</string>
+    <string name="untitled_session">未命名会话</string>
+    <string name="agent_status_title">Agent 状态</string>
+    <string name="agent_status_projects">项目数量：%1$d。来源：%2$s。</string>
+    <string name="opencode_version">OpenCode %1$s</string>
 </resources>

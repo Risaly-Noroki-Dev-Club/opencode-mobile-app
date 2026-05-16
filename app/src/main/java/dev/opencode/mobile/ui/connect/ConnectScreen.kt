@@ -35,12 +35,12 @@ import dev.opencode.mobile.R
 import dev.opencode.mobile.data.AgentClient
 import dev.opencode.mobile.data.ConnectionResult
 import dev.opencode.mobile.data.SettingsStore
-import dev.opencode.mobile.ui.session.ChatConnection
+import dev.opencode.mobile.ui.ServerConnection
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ConnectScreen(onConnected: (ChatConnection) -> Unit) {
+fun ConnectScreen(onConnected: (ServerConnection) -> Unit) {
     val context = LocalContext.current
     val settingsStore = remember { SettingsStore(context) }
     val savedConnection by settingsStore.connection.collectAsState(initial = null)
@@ -119,7 +119,7 @@ fun ConnectScreen(onConnected: (ChatConnection) -> Unit) {
                                 if (connectionResult is ConnectionResult.Success) {
                                     val normalizedServerUrl = serverUrl.trim().trimEnd('/')
                                     settingsStore.saveConnection(normalizedServerUrl, token)
-                                    onConnected(ChatConnection(normalizedServerUrl, token))
+                                    onConnected(ServerConnection(normalizedServerUrl, token))
                                 }
                                 isConnecting = false
                             }
@@ -168,7 +168,7 @@ private fun ConnectionResultCard(result: ConnectionResult, connectionFailed: Str
             } else {
                 stringResource(R.string.upstream_unavailable, result.upstreamError ?: "unknown")
             }
-            stringResource(R.string.connection_success, result.workspaceCount, upstream)
+            stringResource(R.string.connection_success, result.projectCount, result.projectSource ?: "unknown", upstream)
         }
         is ConnectionResult.Failure -> "$connectionFailed: ${result.message}"
     }

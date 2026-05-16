@@ -9,7 +9,7 @@
     <string name="connect_button">Connect</string>
     <string name="connecting_button">Connecting…</string>
     <string name="connection_failed">Connection failed</string>
-    <string name="connection_success">Connected. Workspaces: %1$d. %2$s</string>
+    <string name="connection_success">Connected. Projects: %1$d. Source: %2$s. %3$s</string>
     <string name="upstream_ok">OpenCode is reachable.</string>
     <string name="upstream_unavailable">OpenCode is not reachable yet: %1$s</string>
     <string name="session_title">OpenCode Session</string>
@@ -50,4 +50,16 @@
     <string name="template_explain_description">Map the structure and important entry points.</string>
     <string name="template_explain_prompt">Explain this project structure, key entry points, and how to run or verify it.</string>
     <string name="history_loaded">History loaded</string>
+    <string name="projects_title">Projects</string>
+    <string name="projects_empty">No projects are visible. Check the agent workspace allowlist.</string>
+    <string name="sessions_empty">No sessions in this project yet.</string>
+    <string name="refresh_button">Refresh</string>
+    <string name="disconnect_button">Disconnect</string>
+    <string name="back_button">Back</string>
+    <string name="new_session_button">New session in this project</string>
+    <string name="creating_session_button">Creating session…</string>
+    <string name="untitled_session">Untitled session</string>
+    <string name="agent_status_title">Agent status</string>
+    <string name="agent_status_projects">Projects: %1$d. Source: %2$s.</string>
+    <string name="opencode_version">OpenCode %1$s</string>
 </resources>

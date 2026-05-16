@@ -15,6 +15,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.io.IOException
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -32,20 +33,58 @@ class AgentClient(
 
         try {
             val health = getJson<HealthResponse>("$baseUrl/health", tokenRequired = false, token = token)
-            val workspaces = getJson<WorkspacesResponse>("$baseUrl/workspaces", tokenRequired = true, token = token)
+            val projects = getJson<ProjectsResponse>("$baseUrl/projects", tokenRequired = true, token = token)
             ConnectionResult.Success(
-                upstreamHealthy = health.upstream?.healthy == true,
-                upstreamError = health.upstream?.error,
-                workspaceCount = workspaces.items.size,
+                upstreamHealthy = health.opencode?.healthy ?: health.upstream?.healthy == true,
+                upstreamError = health.opencode?.error ?: health.upstream?.error,
+                projectCount = projects.items.size,
+                projectSource = health.projects?.source,
             )
         } catch (error: Exception) {
             ConnectionResult.Failure(error.message ?: "Connection failed")
         }
     }
 
-    suspend fun createSession(serverUrl: String, token: String): String = withContext(Dispatchers.IO) {
+    suspend fun getHealth(serverUrl: String): AgentHealth = withContext(Dispatchers.IO) {
+        val health = getJson<HealthResponse>(
+            url = "${serverUrl.trim().trimEnd('/')}/health",
+            tokenRequired = false,
+            token = "",
+        )
+        AgentHealth(
+            agentVersion = health.agent?.version,
+            opencodeHealthy = health.opencode?.healthy ?: health.upstream?.healthy == true,
+            opencodeVersion = health.opencode?.version ?: health.upstream?.version,
+            opencodeError = health.opencode?.error ?: health.upstream?.error,
+            projectSource = health.projects?.source,
+            projectCount = health.projects?.count ?: 0,
+        )
+    }
+
+    suspend fun listProjects(serverUrl: String, token: String): List<AgentProject> = withContext(Dispatchers.IO) {
+        getJson<ProjectsResponse>(
+            url = "${serverUrl.trim().trimEnd('/')}/projects",
+            tokenRequired = true,
+            token = token,
+        ).items
+    }
+
+    suspend fun listSessions(
+        serverUrl: String,
+        token: String,
+        projectId: String? = null,
+        directory: String? = null,
+    ): List<AgentSession> = withContext(Dispatchers.IO) {
+        val url = "${serverUrl.trim().trimEnd('/')}/sessions".toHttpUrl().newBuilder().apply {
+            if (!projectId.isNullOrBlank()) addQueryParameter("projectId", projectId)
+            if (!directory.isNullOrBlank()) addQueryParameter("directory", directory)
+        }.build().toString()
+        getJson<SessionsResponse>(url = url, tokenRequired = true, token = token).items
+    }
+
+    suspend fun createSession(serverUrl: String, token: String, directory: String? = null): String = withContext(Dispatchers.IO) {
         val response = postJson<SessionResponse>(
-            url = "${serverUrl.trim().trimEnd('/')}/opencode/session",
+            url = withDirectoryQuery("${serverUrl.trim().trimEnd('/')}/opencode/session", directory),
             token = token,
             body = "{}",
         )
@@ -53,7 +92,7 @@ class AgentClient(
     }
 
     suspend fun sendMessage(serverUrl: String, token: String, sessionId: String, text: String): String = withContext(Dispatchers.IO) {
-        sendMessage(serverUrl, token, sessionId, text, null)
+        sendMessage(serverUrl, token, sessionId, text, null, null)
     }
 
     suspend fun sendMessage(
@@ -62,6 +101,7 @@ class AgentClient(
         sessionId: String,
         text: String,
         model: ModelOption?,
+        directory: String? = null,
     ): String = withContext(Dispatchers.IO) {
         val body = buildJsonObject {
             if (model != null) {
@@ -76,7 +116,7 @@ class AgentClient(
             })))
         }
         val response = postJson<MessageResponse>(
-            url = "${serverUrl.trim().trimEnd('/')}/opencode/session/$sessionId/message",
+            url = withDirectoryQuery("${serverUrl.trim().trimEnd('/')}/opencode/session/$sessionId/message", directory),
             token = token,
             body = json.encodeToString(body),
         )
@@ -93,6 +133,7 @@ class AgentClient(
         command: String,
         arguments: String,
         model: ModelOption?,
+        directory: String? = null,
     ): String = withContext(Dispatchers.IO) {
         val body = buildJsonObject {
             put("command", command)
@@ -105,7 +146,7 @@ class AgentClient(
             }
         }
         val response = postJsonOrNull<MessageResponse>(
-            url = "${serverUrl.trim().trimEnd('/')}/opencode/session/$sessionId/command",
+            url = withDirectoryQuery("${serverUrl.trim().trimEnd('/')}/opencode/session/$sessionId/command", directory),
             token = token,
             body = json.encodeToString(body),
         )
@@ -122,6 +163,7 @@ class AgentClient(
         sessionId: String,
         text: String,
         model: ModelOption?,
+        directory: String? = null,
     ) = withContext(Dispatchers.IO) {
         val body = buildJsonObject {
             if (model != null) {
@@ -136,7 +178,7 @@ class AgentClient(
             })))
         }
         postEmpty(
-            url = "${serverUrl.trim().trimEnd('/')}/opencode/session/$sessionId/prompt_async",
+            url = withDirectoryQuery("${serverUrl.trim().trimEnd('/')}/opencode/session/$sessionId/prompt_async", directory),
             token = token,
             body = json.encodeToString(body),
         )
@@ -202,9 +244,9 @@ class AgentClient(
         }.sortedWith(compareBy<ModelOption> { it.providerName }.thenBy { it.modelName })
     }
 
-    suspend fun listMessages(serverUrl: String, token: String, sessionId: String): List<OpenCodeMessage> = withContext(Dispatchers.IO) {
+    suspend fun listMessages(serverUrl: String, token: String, sessionId: String, directory: String? = null): List<OpenCodeMessage> = withContext(Dispatchers.IO) {
         getJson<List<MessageHistoryItem>>(
-            url = "${serverUrl.trim().trimEnd('/')}/opencode/session/$sessionId/message",
+            url = withDirectoryQuery("${serverUrl.trim().trimEnd('/')}/opencode/session/$sessionId/message", directory),
             tokenRequired = true,
             token = token,
         ).mapNotNull { item ->
@@ -217,9 +259,9 @@ class AgentClient(
         }
     }
 
-    suspend fun getSessionDiff(serverUrl: String, token: String, sessionId: String): List<DiffFile> = withContext(Dispatchers.IO) {
+    suspend fun getSessionDiff(serverUrl: String, token: String, sessionId: String, directory: String? = null): List<DiffFile> = withContext(Dispatchers.IO) {
         val root = getJson<JsonElement>(
-            url = "${serverUrl.trim().trimEnd('/')}/opencode/session/$sessionId/diff",
+            url = withDirectoryQuery("${serverUrl.trim().trimEnd('/')}/opencode/session/$sessionId/diff", directory),
             tokenRequired = true,
             token = token,
         )
@@ -297,6 +339,14 @@ class AgentClient(
             val responseBody = response.body?.string().orEmpty()
             if (!response.isSuccessful) throw IOException("HTTP ${response.code}: $responseBody")
         }
+    }
+
+    private fun withDirectoryQuery(url: String, directory: String?): String {
+        if (directory.isNullOrBlank()) return url
+        return url.toHttpUrl().newBuilder()
+            .addQueryParameter("directory", directory)
+            .build()
+            .toString()
     }
 
     private fun parseStreamEvent(eventName: String?, payload: String): OpenCodeStreamEvent? {
@@ -377,6 +427,33 @@ data class DiffFile(
     val text: String,
 )
 
+@Serializable
+data class AgentProject(
+    val id: String,
+    val name: String,
+    val worktree: String,
+    val vcs: String,
+    val lastActive: Long,
+)
+
+@Serializable
+data class AgentSession(
+    val id: String,
+    val projectId: String,
+    val directory: String,
+    val title: String,
+    val lastActive: Long,
+)
+
+data class AgentHealth(
+    val agentVersion: String?,
+    val opencodeHealthy: Boolean,
+    val opencodeVersion: String?,
+    val opencodeError: String?,
+    val projectSource: String?,
+    val projectCount: Int,
+)
+
 enum class PermissionReply(val wireValue: String) {
     Once("once"),
     Always("always"),
@@ -403,7 +480,8 @@ sealed interface ConnectionResult {
     data class Success(
         val upstreamHealthy: Boolean,
         val upstreamError: String?,
-        val workspaceCount: Int,
+        val projectCount: Int,
+        val projectSource: String?,
     ) : ConnectionResult
 
     data class Failure(val message: String) : ConnectionResult
@@ -412,7 +490,28 @@ sealed interface ConnectionResult {
 @Serializable
 private data class HealthResponse(
     val healthy: Boolean,
+    val agent: AgentInfo? = null,
+    val opencode: OpenCodeHealth? = null,
+    val projects: ProjectsInfo? = null,
     val upstream: UpstreamHealth? = null,
+)
+
+@Serializable
+private data class AgentInfo(
+    val version: String? = null,
+)
+
+@Serializable
+private data class OpenCodeHealth(
+    val healthy: Boolean? = null,
+    val version: String? = null,
+    val error: String? = null,
+)
+
+@Serializable
+private data class ProjectsInfo(
+    val source: String? = null,
+    val count: Int = 0,
 )
 
 @Serializable
@@ -425,6 +524,16 @@ private data class UpstreamHealth(
 @Serializable
 private data class WorkspacesResponse(
     val items: List<WorkspaceItem> = emptyList(),
+)
+
+@Serializable
+private data class ProjectsResponse(
+    val items: List<AgentProject> = emptyList(),
+)
+
+@Serializable
+private data class SessionsResponse(
+    val items: List<AgentSession> = emptyList(),
 )
 
 @Serializable
