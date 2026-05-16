@@ -2,27 +2,34 @@ package dev.opencode.mobile.ui.theme
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.Button
 import androidx.compose.material.ButtonDefaults
 import androidx.compose.material.Card
 import androidx.compose.material.ContentAlpha
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.OutlinedTextField
+import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.material.TextButton
 import androidx.compose.material.TextFieldColors
 import androidx.compose.material.TextFieldDefaults
 import androidx.compose.material.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -42,8 +49,22 @@ fun AdventureBackground(content: @Composable BoxScope.() -> Unit) {
                     ),
                 ),
             ),
-        content = content,
-    )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            MaterialTheme.colors.primary.copy(alpha = 0.10f),
+                            Color.Transparent,
+                        ),
+                        radius = 900f,
+                    ),
+                ),
+        )
+        content()
+    }
 }
 
 @Composable
@@ -60,7 +81,7 @@ fun AdventureTopAppBar(
         actions = actions,
         backgroundColor = MaterialTheme.adventure.topBar,
         contentColor = MaterialTheme.colors.onSurface,
-        elevation = 4.dp,
+        elevation = 0.dp,
     )
 }
 
@@ -77,9 +98,101 @@ fun AdventureCard(
         modifier = modifier,
         backgroundColor = backgroundColor,
         contentColor = contentColor,
-        shape = MaterialTheme.shapes.medium,
+        shape = MaterialTheme.shapes.large,
         border = border,
         elevation = elevation,
+        content = content,
+    )
+}
+
+@Composable
+fun AdventureHeroCard(
+    modifier: Modifier = Modifier,
+    title: String,
+    subtitle: String,
+    meta: String? = null,
+    content: @Composable ColumnScope.() -> Unit = {},
+) {
+    AdventureCard(
+        modifier = modifier,
+        backgroundColor = MaterialTheme.colors.primary,
+        contentColor = MaterialTheme.colors.onPrimary,
+        border = null,
+        elevation = 4.dp,
+    ) {
+        Column(
+            modifier = Modifier
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colors.primary,
+                            MaterialTheme.adventure.secondary,
+                            MaterialTheme.adventure.accent.copy(alpha = 0.86f),
+                        ),
+                    ),
+                )
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.h5,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.body2,
+                color = MaterialTheme.colors.onPrimary.copy(alpha = 0.86f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (!meta.isNullOrBlank()) {
+                AdventurePill(
+                    text = meta,
+                    backgroundColor = Color.White.copy(alpha = 0.16f),
+                    contentColor = MaterialTheme.colors.onPrimary,
+                )
+            }
+            content()
+        }
+    }
+}
+
+@Composable
+fun AdventurePill(
+    text: String,
+    modifier: Modifier = Modifier,
+    backgroundColor: Color = MaterialTheme.adventure.surface3,
+    contentColor: Color = MaterialTheme.adventure.textMedium,
+) {
+    Surface(
+        modifier = modifier,
+        color = backgroundColor,
+        contentColor = contentColor,
+        shape = MaterialTheme.shapes.small,
+        border = BorderStroke(1.dp, MaterialTheme.adventure.divider.copy(alpha = 0.72f)),
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            style = MaterialTheme.typography.caption,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+fun AdventureMetaRow(
+    modifier: Modifier = Modifier,
+    content: @Composable RowScope.() -> Unit,
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
         content = content,
     )
 }
@@ -145,7 +258,7 @@ fun AdventureOutlinedTextField(
         minLines = minLines,
         maxLines = maxLines,
         visualTransformation = visualTransformation,
-        shape = MaterialTheme.shapes.small,
+        shape = MaterialTheme.shapes.medium,
         colors = adventureTextFieldColors(),
     )
 }
@@ -158,7 +271,7 @@ fun adventureTextFieldColors(): TextFieldColors = TextFieldDefaults.outlinedText
     focusedLabelColor = MaterialTheme.colors.primary,
     unfocusedLabelColor = MaterialTheme.adventure.textMedium,
     cursorColor = MaterialTheme.colors.primary,
-    backgroundColor = MaterialTheme.colors.surface,
+    backgroundColor = MaterialTheme.adventure.cardContainer,
 )
 
 @Composable
@@ -168,5 +281,6 @@ fun AdventureSectionLabel(text: String, modifier: Modifier = Modifier) {
         modifier = modifier,
         style = MaterialTheme.typography.overline,
         color = MaterialTheme.adventure.textMedium,
+        fontWeight = FontWeight.SemiBold,
     )
 }

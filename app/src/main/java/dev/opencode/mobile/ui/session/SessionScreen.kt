@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -46,6 +47,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.R
@@ -64,6 +68,8 @@ import dev.opencode.mobile.ui.theme.AdventureBackground
 import dev.opencode.mobile.ui.theme.AdventureCard
 import dev.opencode.mobile.ui.theme.AdventureFilledButton
 import dev.opencode.mobile.ui.theme.AdventureOutlinedTextField
+import dev.opencode.mobile.ui.theme.AdventurePill
+import dev.opencode.mobile.ui.theme.AdventureSectionLabel
 import dev.opencode.mobile.ui.theme.AdventureTextButton
 import dev.opencode.mobile.ui.theme.AdventureTopAppBar
 import dev.opencode.mobile.ui.theme.adventure
@@ -604,7 +610,7 @@ private fun NaviSheetContent(
         if (models.isNotEmpty()) {
             item { NaviSectionTitle(stringResource(R.string.navi_section_models)) }
             item {
-                OutlinedTextField(
+                AdventureOutlinedTextField(
                     value = modelQuery,
                     onValueChange = { modelQuery = it },
                     modifier = Modifier.fillMaxWidth(),
@@ -674,15 +680,20 @@ private fun DiffSheetContent(diffFiles: List<DiffFile>) {
             )
         }
         items(diffFiles) { file ->
-            Card(
-                shape = MaterialTheme.shapes.medium,
-                backgroundColor = MaterialTheme.colors.onSurface.copy(alpha = 0.08f),
-                elevation = 1.dp,
+            AdventureCard(
+                backgroundColor = MaterialTheme.adventure.cardContainer,
+                elevation = 2.dp,
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(text = file.path, style = MaterialTheme.typography.overline, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { clipboard.setText(AnnotatedString(file.text)) }) { Text(stringResource(R.string.copy_button)) }
+                        Text(
+                            text = file.path,
+                            style = MaterialTheme.typography.overline,
+                            modifier = Modifier.weight(1f),
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.adventure.textMedium,
+                        )
+                        AdventureTextButton(onClick = { clipboard.setText(AnnotatedString(file.text)) }) { Text(stringResource(R.string.copy_button)) }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     MarkdownText(text = "```diff\n${file.text}\n```")
@@ -704,56 +715,52 @@ private fun PermissionSheetContent(
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text(text = stringResource(R.string.permission_title), style = MaterialTheme.typography.h6)
-        Card(
-            backgroundColor = MaterialTheme.colors.error.copy(alpha = 0.08f),
-            shape = MaterialTheme.shapes.medium,
+        AdventureSectionLabel(stringResource(R.string.permission_title))
+        AdventureCard(
+            backgroundColor = MaterialTheme.colors.error.copy(alpha = 0.10f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colors.error.copy(alpha = 0.25f)),
             elevation = 0.dp,
         ) {
-            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(text = permission.title, style = MaterialTheme.typography.subtitle1)
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(text = permission.title, style = MaterialTheme.typography.subtitle1, fontWeight = FontWeight.SemiBold)
                 Text(
                     text = permission.details,
                     style = MaterialTheme.typography.body2,
-                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.adventure.textMedium,
                 )
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            Button(onClick = { onReply(PermissionReply.Reject) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.permission_reject)) }
-            Button(onClick = { onReply(PermissionReply.Once) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.permission_once)) }
-            Button(onClick = { onReply(PermissionReply.Always) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.permission_always)) }
+            AdventureFilledButton(onClick = { onReply(PermissionReply.Reject) }, modifier = Modifier.weight(1f), backgroundColor = MaterialTheme.colors.error) { Text(stringResource(R.string.permission_reject)) }
+            AdventureFilledButton(onClick = { onReply(PermissionReply.Once) }, modifier = Modifier.weight(1f), backgroundColor = MaterialTheme.adventure.secondary) { Text(stringResource(R.string.permission_once)) }
+            AdventureFilledButton(onClick = { onReply(PermissionReply.Always) }, modifier = Modifier.weight(1f), backgroundColor = MaterialTheme.adventure.accent) { Text(stringResource(R.string.permission_always)) }
         }
     }
 }
 
 @Composable
 private fun NaviSectionTitle(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.subtitle2,
-        color = MaterialTheme.colors.onSurface.copy(alpha = 0.7f),
-        modifier = Modifier.padding(top = 8.dp),
-    )
+    AdventureSectionLabel(text)
 }
 
 @Composable
 private fun NaviActionCard(title: String, description: String, onClick: () -> Unit) {
-    Card(
+    AdventureCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
-        backgroundColor = MaterialTheme.colors.onSurface.copy(alpha = 0.08f),
-        shape = MaterialTheme.shapes.medium,
-        elevation = 1.dp,
+        backgroundColor = MaterialTheme.adventure.cardContainer,
+        elevation = 2.dp,
     ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-            Text(text = title, style = MaterialTheme.typography.subtitle2)
-            Spacer(modifier = Modifier.height(4.dp))
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(text = title, style = MaterialTheme.typography.subtitle1, fontWeight = FontWeight.SemiBold)
             Text(
                 text = description,
                 style = MaterialTheme.typography.body2,
-                color = MaterialTheme.colors.onSurface.copy(alpha = 0.7f),
+                color = MaterialTheme.adventure.textMedium,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -808,10 +815,9 @@ private fun MessageCard(message: ChatMessage, onRetry: (String) -> Unit) {
         ChatRole.Tool -> stringResource(R.string.role_tool)
         ChatRole.Working -> "Working"
     }
-    Card(
+    AdventureCard(
         backgroundColor = containerColor,
-        shape = MaterialTheme.shapes.medium,
-        elevation = 1.dp,
+        elevation = 2.dp,
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(
@@ -820,9 +826,24 @@ private fun MessageCard(message: ChatMessage, onRetry: (String) -> Unit) {
             ),
     ) {
         Box {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(text = title, style = MaterialTheme.typography.button)
-                Spacer(modifier = Modifier.height(6.dp))
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                AdventurePill(
+                    text = title,
+                    backgroundColor = when (message.role) {
+                        ChatRole.User -> MaterialTheme.colors.primary.copy(alpha = 0.16f)
+                        ChatRole.Assistant -> MaterialTheme.adventure.secondary.copy(alpha = 0.14f)
+                        ChatRole.System -> MaterialTheme.adventure.infoContainer
+                        ChatRole.Tool -> MaterialTheme.adventure.surface2
+                        ChatRole.Working -> MaterialTheme.adventure.accent.copy(alpha = 0.18f)
+                    },
+                    contentColor = when (message.role) {
+                        ChatRole.User -> MaterialTheme.colors.primary
+                        ChatRole.Assistant -> MaterialTheme.adventure.secondary
+                        ChatRole.System -> MaterialTheme.adventure.info
+                        ChatRole.Tool -> MaterialTheme.adventure.textMedium
+                        ChatRole.Working -> MaterialTheme.adventure.accent
+                    },
+                )
                 if (message.role == ChatRole.Assistant) {
                     MarkdownText(text = message.text)
                 } else if (message.role == ChatRole.Tool) {
@@ -886,10 +907,9 @@ private fun WorkingMessageCard(streamStatus: StreamStatus, waitingSinceMs: Long?
 
 @Composable
 private fun StatusCard(message: String) {
-    Card(
+    AdventureCard(
         backgroundColor = MaterialTheme.colors.error.copy(alpha = 0.12f),
-        shape = MaterialTheme.shapes.medium,
-        elevation = 1.dp,
+        elevation = 0.dp,
     ) {
         Text(
             text = message,
