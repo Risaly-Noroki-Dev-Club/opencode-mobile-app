@@ -82,8 +82,8 @@ fun ConnectScreen(onConnected: (ServerConnection) -> Unit) {
             Spacer(modifier = Modifier.height(32.dp))
             Card(
                 backgroundColor = MaterialTheme.colors.onSurface.copy(alpha = 0.08f),
-                shape = MaterialTheme.shapes.large,
-                elevation = 2.dp,
+                shape = MaterialTheme.shapes.medium,
+                elevation = 1.dp,
             ) {
                 Column(
                     modifier = Modifier.padding(20.dp),
@@ -120,7 +120,6 @@ fun ConnectScreen(onConnected: (ServerConnection) -> Unit) {
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.medium,
                         enabled = !isConnecting,
                     ) {
                         Text(
@@ -171,8 +170,8 @@ private fun ConnectionResultCard(result: ConnectionResult, connectionFailed: Str
     Card(
         backgroundColor = containerColor,
         contentColor = contentColor,
-        shape = MaterialTheme.shapes.large,
-        elevation = 2.dp,
+        shape = MaterialTheme.shapes.medium,
+        elevation = 1.dp,
     ) {
         Text(
             text = text,

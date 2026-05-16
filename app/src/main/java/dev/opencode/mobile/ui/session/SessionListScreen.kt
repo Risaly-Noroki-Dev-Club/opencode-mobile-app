@@ -117,7 +117,6 @@ fun SessionListScreen(
             Button(
                 onClick = ::createSession,
                 enabled = !creating,
-                shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(if (creating) stringResource(R.string.creating_session_button) else stringResource(R.string.new_session_button))
@@ -150,8 +149,8 @@ private fun SessionCard(session: AgentSession, onClick: () -> Unit) {
             .fillMaxWidth()
             .clickable { onClick() },
         backgroundColor = MaterialTheme.colors.onSurface.copy(alpha = 0.08f),
-        shape = MaterialTheme.shapes.large,
-        elevation = 2.dp,
+        shape = MaterialTheme.shapes.medium,
+        elevation = 1.dp,
     ) {
         Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -167,8 +166,8 @@ private fun SessionCard(session: AgentSession, onClick: () -> Unit) {
 private fun ErrorCard(message: String) {
     Card(
         backgroundColor = MaterialTheme.colors.error.copy(alpha = 0.12f),
-        shape = MaterialTheme.shapes.large,
-        elevation = 2.dp,
+        shape = MaterialTheme.shapes.medium,
+        elevation = 1.dp,
     ) {
         Text(text = message, modifier = Modifier.padding(16.dp), color = MaterialTheme.colors.error)
     }
@@ -178,8 +177,8 @@ private fun ErrorCard(message: String) {
 private fun EmptyCard(message: String) {
     Card(
         backgroundColor = MaterialTheme.colors.onSurface.copy(alpha = 0.08f),
-        shape = MaterialTheme.shapes.large,
-        elevation = 2.dp,
+        shape = MaterialTheme.shapes.medium,
+        elevation = 1.dp,
     ) {
         Text(text = message, modifier = Modifier.padding(16.dp))
     }

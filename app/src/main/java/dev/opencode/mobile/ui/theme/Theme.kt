@@ -9,11 +9,8 @@ fun OpenCodeMobileTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    val colors = dynamicM2Colors(darkTheme)
-        ?: if (darkTheme) DarkColors else LightColors
-
     MaterialTheme(
-        colors = colors,
+        colors = if (darkTheme) DarkColors else LightColors,
         typography = AppTypography,
         shapes = AppShapes,
         content = content,

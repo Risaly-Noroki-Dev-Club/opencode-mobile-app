@@ -1,14 +1,8 @@
 package dev.opencode.mobile.ui.theme
 
-import android.os.Build
-import androidx.compose.material.Colors
 import androidx.compose.material.darkColors
 import androidx.compose.material.lightColors
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 
 val LightColors = lightColors(
     primary = Color(0xFF2C3E50),
@@ -39,41 +33,3 @@ val DarkColors = darkColors(
     onSurface = Color(0xFFE0E0E0),
     onError = Color(0xFF000000),
 )
-
-@Composable
-fun dynamicM2Colors(darkTheme: Boolean): Colors? {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return null
-    val context = LocalContext.current
-    val scheme = if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-    return if (darkTheme) {
-        darkColors(
-            primary = scheme.primary,
-            primaryVariant = scheme.tertiary,
-            secondary = scheme.secondary,
-            secondaryVariant = scheme.secondaryContainer,
-            background = scheme.background,
-            surface = scheme.surface,
-            error = scheme.error,
-            onPrimary = scheme.onPrimary,
-            onSecondary = scheme.onSecondary,
-            onBackground = scheme.onBackground,
-            onSurface = scheme.onSurface,
-            onError = scheme.onError,
-        )
-    } else {
-        lightColors(
-            primary = scheme.primary,
-            primaryVariant = scheme.tertiary,
-            secondary = scheme.secondary,
-            secondaryVariant = scheme.secondaryContainer,
-            background = scheme.background,
-            surface = scheme.surface,
-            error = scheme.error,
-            onPrimary = scheme.onPrimary,
-            onSecondary = scheme.onSecondary,
-            onBackground = scheme.onBackground,
-            onSurface = scheme.onSurface,
-            onError = scheme.onError,
-        )
-    }
-}

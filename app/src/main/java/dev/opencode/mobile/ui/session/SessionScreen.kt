@@ -335,7 +335,6 @@ fun SessionScreen(
                 ) {
                     Button(
                         onClick = { sheetContent = SheetContent.Navi },
-                        shape = MaterialTheme.shapes.medium,
                     ) {
                         Text(stringResource(R.string.navi_button))
                     }
@@ -493,9 +492,9 @@ private fun DiffSheetContent(diffFiles: List<DiffFile>) {
         }
         items(diffFiles) { file ->
             Card(
-                shape = MaterialTheme.shapes.large,
+                shape = MaterialTheme.shapes.medium,
                 backgroundColor = MaterialTheme.colors.onSurface.copy(alpha = 0.08f),
-                elevation = 2.dp,
+                elevation = 1.dp,
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(text = file.path, style = MaterialTheme.typography.overline)
@@ -547,8 +546,8 @@ private fun NaviActionCard(title: String, description: String, onClick: () -> Un
             .fillMaxWidth()
             .clickable { onClick() },
         backgroundColor = MaterialTheme.colors.onSurface.copy(alpha = 0.08f),
-        shape = MaterialTheme.shapes.large,
-        elevation = 2.dp,
+        shape = MaterialTheme.shapes.medium,
+        elevation = 1.dp,
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Text(text = title, style = MaterialTheme.typography.subtitle2)
@@ -608,8 +607,8 @@ private fun MessageCard(message: ChatMessage) {
     }
     Card(
         backgroundColor = containerColor,
-        shape = MaterialTheme.shapes.large,
-        elevation = 2.dp,
+        shape = MaterialTheme.shapes.medium,
+        elevation = 1.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
