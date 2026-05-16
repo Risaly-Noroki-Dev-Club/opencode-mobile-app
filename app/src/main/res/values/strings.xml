@@ -83,4 +83,9 @@
     <string name="delete_button">Delete</string>
     <string name="session_search_label">Search sessions</string>
     <string name="model_search_label">Search models</string>
+    <string name="navi_section_local">Local</string>
+    <string name="clear_local_cache_title">Clear local cache</string>
+    <string name="clear_local_cache_description">Remove cached messages and draft for this session.</string>
+    <string name="project_search_label">Search projects</string>
+    <string name="recent_session_badge">Recent</string>
 </resources>

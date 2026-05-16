@@ -43,12 +43,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.R
 import dev.opencode.mobile.data.AgentClient
+import dev.opencode.mobile.data.CachedChatMessage
+import dev.opencode.mobile.data.ChatCacheStore
 import dev.opencode.mobile.data.DiffFile
 import dev.opencode.mobile.data.ModelOption
 import dev.opencode.mobile.data.OpenCodeMessage
@@ -89,6 +92,8 @@ fun SessionScreen(
     onBack: () -> Unit,
 ) {
     val agentClient = remember { AgentClient() }
+    val context = LocalContext.current
+    val cacheStore = remember(context) { ChatCacheStore(context) }
     val scope = rememberCoroutineScope()
     val messages = remember { mutableStateListOf<ChatMessage>() }
     var sessionId by remember { mutableStateOf<String?>(activeSession.id) }
@@ -114,7 +119,13 @@ fun SessionScreen(
         busy = true
         sessionId = activeSession.id
         messages.clear()
-        messages += ChatMessage(ChatRole.System, "${connection.serverUrl}\n${activeSession.directory.orEmpty()}\n${activeSession.id}")
+        val cachedMessages = cacheStore.loadMessages(activeSession.id).map { it.toChatMessage() }
+        if (cachedMessages.isNotEmpty()) {
+            messages += cachedMessages
+        } else {
+            messages += ChatMessage(ChatRole.System, "${connection.serverUrl}\n${activeSession.directory.orEmpty()}\n${activeSession.id}")
+        }
+        input = cacheStore.loadDraft(activeSession.id)
         runCatching { agentClient.listMessages(connection.serverUrl, connection.token, activeSession.id, activeSession.directory) }
             .onSuccess { history ->
                 if (history.isNotEmpty()) {
@@ -135,6 +146,16 @@ fun SessionScreen(
                 selectedModel = availableModels.firstOrNull { it.providerId == "rakuraku" && it.modelId == "gpt-5.5" }
                     ?: availableModels.firstOrNull()
             }
+    }
+
+    LaunchedEffect(messages.size, messages.lastOrNull()?.text, sessionId) {
+        val activeSessionId = sessionId ?: return@LaunchedEffect
+        cacheStore.saveMessages(activeSessionId, messages.map { it.toCachedMessage() })
+    }
+
+    LaunchedEffect(input, sessionId) {
+        val activeSessionId = sessionId ?: return@LaunchedEffect
+        cacheStore.saveDraft(activeSessionId, input)
     }
 
     LaunchedEffect(connection, sessionId) {
@@ -274,6 +295,16 @@ fun SessionScreen(
                     onAddProvider = { sheetContent = SheetContent.AddProvider },
                     onAddModel = { sheetContent = SheetContent.AddModel },
                     onLoginProvider = { sheetContent = SheetContent.LoginProvider },
+                    onClearLocalCache = {
+                        val activeSessionId = sessionId ?: return@NaviSheetContent
+                        scope.launch {
+                            cacheStore.clearSession(activeSessionId)
+                            messages.clear()
+                            input = ""
+                            messages += ChatMessage(ChatRole.System, stringResource_cacheCleared)
+                            sheetContent = SheetContent.None
+                        }
+                    },
                 )
                 SheetContent.Diff -> DiffSheetContent(
                     diffFiles = diffFiles,
@@ -462,6 +493,7 @@ private fun NaviSheetContent(
     onAddProvider: () -> Unit,
     onAddModel: () -> Unit,
     onLoginProvider: () -> Unit,
+    onClearLocalCache: () -> Unit,
 ) {
     val templates = promptTemplates()
     var modelQuery by remember { mutableStateOf("") }
@@ -551,6 +583,14 @@ private fun NaviSheetContent(
                 onClick = onLoginProvider,
             )
         }
+        item { NaviSectionTitle(stringResource(R.string.navi_section_local)) }
+        item {
+            NaviActionCard(
+                title = stringResource(R.string.clear_local_cache_title),
+                description = stringResource(R.string.clear_local_cache_description),
+                onClick = onClearLocalCache,
+            )
+        }
         item { Spacer(modifier = Modifier.height(20.dp)) }
     }
 }
@@ -604,12 +644,24 @@ private fun PermissionSheetContent(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Text(text = stringResource(R.string.permission_title), style = MaterialTheme.typography.h6)
-        Text(text = permission.title, style = MaterialTheme.typography.subtitle2)
-        Text(text = permission.details, style = MaterialTheme.typography.body2)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { onReply(PermissionReply.Reject) }) { Text(stringResource(R.string.permission_reject)) }
-            Button(onClick = { onReply(PermissionReply.Once) }) { Text(stringResource(R.string.permission_once)) }
-            Button(onClick = { onReply(PermissionReply.Always) }) { Text(stringResource(R.string.permission_always)) }
+        Card(
+            backgroundColor = MaterialTheme.colors.error.copy(alpha = 0.08f),
+            shape = MaterialTheme.shapes.medium,
+            elevation = 0.dp,
+        ) {
+            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(text = permission.title, style = MaterialTheme.typography.subtitle1)
+                Text(
+                    text = permission.details,
+                    style = MaterialTheme.typography.body2,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                )
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = { onReply(PermissionReply.Reject) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.permission_reject)) }
+            Button(onClick = { onReply(PermissionReply.Once) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.permission_once)) }
+            Button(onClick = { onReply(PermissionReply.Always) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.permission_always)) }
         }
     }
 }
@@ -710,6 +762,13 @@ private fun MessageCard(message: ChatMessage, onRetry: (String) -> Unit) {
                 Spacer(modifier = Modifier.height(6.dp))
                 if (message.role == ChatRole.Assistant) {
                     MarkdownText(text = message.text)
+                } else if (message.role == ChatRole.Tool) {
+                    Text(
+                        text = message.text,
+                        style = MaterialTheme.typography.caption,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.8f),
+                    )
                 } else {
                     Text(text = message.text, style = MaterialTheme.typography.body2)
                 }
@@ -785,7 +844,28 @@ private fun OpenCodeMessage.toChatMessage(): ChatMessage {
     return ChatMessage(role = chatRole, text = text)
 }
 
+private fun CachedChatMessage.toChatMessage(): ChatMessage {
+    val chatRole = when (role) {
+        "user" -> ChatRole.User
+        "assistant" -> ChatRole.Assistant
+        "tool" -> ChatRole.Tool
+        else -> ChatRole.System
+    }
+    return ChatMessage(role = chatRole, text = text)
+}
+
+private fun ChatMessage.toCachedMessage(): CachedChatMessage {
+    val roleName = when (role) {
+        ChatRole.User -> "user"
+        ChatRole.Assistant -> "assistant"
+        ChatRole.Tool -> "tool"
+        ChatRole.System -> "system"
+    }
+    return CachedChatMessage(role = roleName, text = text)
+}
+
 private const val stringResource_providerSuccess = "Done. Models will refresh."
+private const val stringResource_cacheCleared = "Local cache cleared."
 
 private suspend fun reloadModels(
     client: AgentClient,

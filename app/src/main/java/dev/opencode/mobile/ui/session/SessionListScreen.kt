@@ -26,12 +26,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.R
 import dev.opencode.mobile.data.AgentClient
 import dev.opencode.mobile.data.AgentProject
 import dev.opencode.mobile.data.AgentSession
+import dev.opencode.mobile.data.ChatCacheStore
 import dev.opencode.mobile.ui.ActiveSession
 import dev.opencode.mobile.ui.ServerConnection
 import kotlinx.coroutines.launch
@@ -46,12 +48,15 @@ fun SessionListScreen(
     onSession: (ActiveSession) -> Unit,
 ) {
     val agentClient = remember { AgentClient() }
+    val context = LocalContext.current
+    val cacheStore = remember(context) { ChatCacheStore(context) }
     val scope = rememberCoroutineScope()
     var sessions by remember { mutableStateOf<List<AgentSession>>(emptyList()) }
     var loading by remember { mutableStateOf(false) }
     var creating by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var query by remember { mutableStateOf("") }
+    var recentSessionId by remember { mutableStateOf("") }
 
     fun refresh() {
         loading = true
@@ -89,7 +94,10 @@ fun SessionListScreen(
         }
     }
 
-    LaunchedEffect(connection, project.id) { refresh() }
+    LaunchedEffect(connection, project.id) {
+        recentSessionId = cacheStore.loadRecentSession(project.id)
+        refresh()
+    }
 
     val visibleSessions = sessions.filter { session ->
         val value = query.trim()
@@ -143,14 +151,19 @@ fun SessionListScreen(
                 items(visibleSessions) { session ->
                     SessionCard(
                         session = session,
+                        isRecent = session.id == recentSessionId,
                         onDelete = {
                             scope.launch {
                                 runCatching { agentClient.deleteSession(connection.serverUrl, connection.token, session.id, session.directory) }
-                                    .onSuccess { refresh() }
+                                    .onSuccess {
+                                        cacheStore.clearSession(session.id)
+                                        refresh()
+                                    }
                                     .onFailure { error = it.message ?: "Failed to delete session" }
                             }
                         },
                     ) {
+                        scope.launch { cacheStore.saveRecentSession(project.id, session.id) }
                         onSession(
                             ActiveSession(
                                 id = session.id,
@@ -167,7 +180,7 @@ fun SessionListScreen(
 }
 
 @Composable
-private fun SessionCard(session: AgentSession, onDelete: () -> Unit, onClick: () -> Unit) {
+private fun SessionCard(session: AgentSession, isRecent: Boolean, onDelete: () -> Unit, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -179,7 +192,11 @@ private fun SessionCard(session: AgentSession, onDelete: () -> Unit, onClick: ()
         Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(text = session.title.ifBlank { stringResource(R.string.untitled_session) }, style = MaterialTheme.typography.subtitle2)
-                Text(text = formatTime(session.lastActive), style = MaterialTheme.typography.caption)
+                Text(
+                    text = if (isRecent) stringResource(R.string.recent_session_badge) else formatTime(session.lastActive),
+                    style = MaterialTheme.typography.caption,
+                    color = if (isRecent) MaterialTheme.colors.primary else MaterialTheme.colors.onSurface,
+                )
             }
             Text(text = session.directory, style = MaterialTheme.typography.body2, color = MaterialTheme.colors.onSurface.copy(alpha = 0.7f))
             TextButton(onClick = onDelete) { Text(stringResource(R.string.delete_button)) }

@@ -15,6 +15,7 @@ import androidx.compose.material.Button
 import androidx.compose.material.Card
 import androidx.compose.material.LinearProgressIndicator
 import androidx.compose.material.MaterialTheme
+import androidx.compose.material.OutlinedTextField
 import androidx.compose.material.Scaffold
 import androidx.compose.material.Text
 import androidx.compose.material.TextButton
@@ -50,6 +51,7 @@ fun ProjectListScreen(
     var projects by remember { mutableStateOf<List<AgentProject>>(emptyList()) }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var query by remember { mutableStateOf("") }
 
     fun refresh() {
         loading = true
@@ -64,6 +66,12 @@ fun ProjectListScreen(
     }
 
     LaunchedEffect(connection) { refresh() }
+
+    val visibleProjects = projects.filter { project ->
+        val value = query.trim()
+        value.isBlank() || project.name.contains(value, ignoreCase = true) ||
+            project.worktree.contains(value, ignoreCase = true) || project.vcs.contains(value, ignoreCase = true)
+    }
 
     Scaffold(
         topBar = {
@@ -85,12 +93,19 @@ fun ProjectListScreen(
         ) {
             if (loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             health?.let { HealthCard(it) }
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(stringResource(R.string.project_search_label)) },
+                singleLine = true,
+            )
             error?.let { ErrorCard(it) }
-            if (!loading && projects.isEmpty() && error == null) {
+            if (!loading && visibleProjects.isEmpty() && error == null) {
                 EmptyCard(stringResource(R.string.projects_empty))
             }
             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(projects) { project ->
+                items(visibleProjects) { project ->
                     ProjectCard(project = project, onClick = { onProject(project) })
                 }
             }
