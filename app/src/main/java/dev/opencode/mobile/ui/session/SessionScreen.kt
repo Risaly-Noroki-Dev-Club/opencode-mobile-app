@@ -72,6 +72,9 @@ fun SessionScreen(
     var input by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var showNavi by remember { mutableStateOf(false) }
+    var showAddProvider by remember { mutableStateOf(false) }
+    var showAddModel by remember { mutableStateOf(false) }
+    var showLoginProvider by remember { mutableStateOf(false) }
     var commands by remember { mutableStateOf<List<OpenCodeCommand>>(emptyList()) }
     var models by remember { mutableStateOf<List<ModelOption>>(emptyList()) }
     var selectedModel by remember { mutableStateOf<ModelOption?>(null) }
@@ -274,6 +277,9 @@ fun SessionScreen(
                         .onFailure { messages += ChatMessage(ChatRole.System, it.message ?: "Diff failed") }
                 }
             },
+            onAddProvider = { showNavi = false; showAddProvider = true },
+            onAddModel = { showNavi = false; showAddModel = true },
+            onLoginProvider = { showNavi = false; showLoginProvider = true },
         )
     }
 
@@ -295,6 +301,58 @@ fun SessionScreen(
             },
         )
     }
+
+    if (showAddProvider) {
+        AddProviderSheet(
+            onDismiss = { showAddProvider = false },
+            onSubmit = { id, baseURL, apiKey, modelId, modelName ->
+                showAddProvider = false
+                scope.launch {
+                    val modelMap = if (modelId.isNotBlank() && modelName.isNotBlank()) mapOf(modelId to modelName) else emptyMap()
+                    runCatching { agentClient.addProvider(connection.serverUrl, connection.token, id, baseURL, apiKey, modelMap) }
+                        .onSuccess {
+                            messages += ChatMessage(ChatRole.System, stringResource_providerSuccess)
+                            reloadModels(agentClient, connection, models = { models = it }, selected = { selectedModel = it })
+                        }
+                        .onFailure { messages += ChatMessage(ChatRole.System, it.message ?: "Failed") }
+                }
+            },
+        )
+    }
+
+    if (showAddModel) {
+        AddModelSheet(
+            onDismiss = { showAddModel = false },
+            onSubmit = { providerId, modelId, modelName ->
+                showAddModel = false
+                scope.launch {
+                    runCatching { agentClient.addModel(connection.serverUrl, connection.token, providerId, modelId, modelName) }
+                        .onSuccess {
+                            messages += ChatMessage(ChatRole.System, stringResource_providerSuccess)
+                            reloadModels(agentClient, connection, models = { models = it }, selected = { selectedModel = it })
+                        }
+                        .onFailure { messages += ChatMessage(ChatRole.System, it.message ?: "Failed") }
+                }
+            },
+        )
+    }
+
+    if (showLoginProvider) {
+        LoginProviderSheet(
+            onDismiss = { showLoginProvider = false },
+            onSubmit = { providerId, apiKey ->
+                showLoginProvider = false
+                scope.launch {
+                    runCatching { agentClient.loginProvider(connection.serverUrl, connection.token, providerId, apiKey) }
+                        .onSuccess {
+                            messages += ChatMessage(ChatRole.System, stringResource_providerSuccess)
+                            reloadModels(agentClient, connection, models = { models = it }, selected = { selectedModel = it })
+                        }
+                        .onFailure { messages += ChatMessage(ChatRole.System, it.message ?: "Failed") }
+                }
+            },
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -308,6 +366,9 @@ private fun NaviSheet(
     onCommand: (OpenCodeCommand) -> Unit,
     onModel: (ModelOption) -> Unit,
     onDiff: () -> Unit,
+    onAddProvider: () -> Unit,
+    onAddModel: () -> Unit,
+    onLoginProvider: () -> Unit,
 ) {
     val templates = promptTemplates()
 
@@ -364,6 +425,28 @@ private fun NaviSheet(
                         modifier = Modifier.widthIn(max = 520.dp),
                     )
                 }
+            }
+            item { NaviSectionTitle(stringResource(R.string.navi_section_providers)) }
+            item {
+                NaviActionCard(
+                    title = stringResource(R.string.navi_add_provider_title),
+                    description = stringResource(R.string.navi_add_provider_description),
+                    onClick = onAddProvider,
+                )
+            }
+            item {
+                NaviActionCard(
+                    title = stringResource(R.string.navi_add_model_title),
+                    description = stringResource(R.string.navi_add_model_description),
+                    onClick = onAddModel,
+                )
+            }
+            item {
+                NaviActionCard(
+                    title = stringResource(R.string.navi_login_provider_title),
+                    description = stringResource(R.string.navi_login_provider_description),
+                    onClick = onLoginProvider,
+                )
             }
             item { Spacer(modifier = Modifier.height(20.dp)) }
         }
@@ -554,4 +637,106 @@ private fun OpenCodeMessage.toChatMessage(): ChatMessage {
         else -> ChatRole.System
     }
     return ChatMessage(role = chatRole, text = text)
+}
+
+private const val stringResource_providerSuccess = "Done. Models will refresh."
+
+private suspend fun reloadModels(
+    client: AgentClient,
+    connection: ServerConnection,
+    models: (List<ModelOption>) -> Unit,
+    selected: (ModelOption?) -> Unit,
+) {
+    kotlinx.coroutines.delay(3000)
+    runCatching { client.listModels(connection.serverUrl, connection.token) }
+        .onSuccess { list ->
+            models(list)
+            selected(list.firstOrNull())
+        }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddProviderSheet(onDismiss: () -> Unit, onSubmit: (String, String, String, String, String) -> Unit) {
+    var id by remember { mutableStateOf("") }
+    var baseURL by remember { mutableStateOf("") }
+    var apiKey by remember { mutableStateOf("") }
+    var modelId by remember { mutableStateOf("") }
+    var modelName by remember { mutableStateOf("") }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(topStart = 36.dp, topEnd = 36.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(stringResource(R.string.navi_add_provider_title), style = MaterialTheme.typography.headlineSmall)
+            OutlinedTextField(value = id, onValueChange = { id = it }, label = { Text(stringResource(R.string.provider_id_label)) }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = baseURL, onValueChange = { baseURL = it }, label = { Text(stringResource(R.string.provider_base_url_label)) }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = apiKey, onValueChange = { apiKey = it }, label = { Text(stringResource(R.string.provider_api_key_label)) }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = modelId, onValueChange = { modelId = it }, label = { Text(stringResource(R.string.provider_model_id_label)) }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = modelName, onValueChange = { modelName = it }, label = { Text(stringResource(R.string.provider_model_name_label)) }, modifier = Modifier.fillMaxWidth())
+            Button(
+                enabled = id.isNotBlank() && baseURL.isNotBlank() && apiKey.isNotBlank(),
+                onClick = { onSubmit(id.trim(), baseURL.trim(), apiKey.trim(), modelId.trim(), modelName.trim()) },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(stringResource(R.string.provider_submit)) }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddModelSheet(onDismiss: () -> Unit, onSubmit: (String, String, String) -> Unit) {
+    var providerId by remember { mutableStateOf("") }
+    var modelId by remember { mutableStateOf("") }
+    var modelName by remember { mutableStateOf("") }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(topStart = 36.dp, topEnd = 36.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(stringResource(R.string.navi_add_model_title), style = MaterialTheme.typography.headlineSmall)
+            OutlinedTextField(value = providerId, onValueChange = { providerId = it }, label = { Text(stringResource(R.string.provider_id_label)) }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = modelId, onValueChange = { modelId = it }, label = { Text(stringResource(R.string.provider_model_id_label)) }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = modelName, onValueChange = { modelName = it }, label = { Text(stringResource(R.string.provider_model_name_label)) }, modifier = Modifier.fillMaxWidth())
+            Button(
+                enabled = providerId.isNotBlank() && modelId.isNotBlank() && modelName.isNotBlank(),
+                onClick = { onSubmit(providerId.trim(), modelId.trim(), modelName.trim()) },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(stringResource(R.string.provider_submit)) }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LoginProviderSheet(onDismiss: () -> Unit, onSubmit: (String, String) -> Unit) {
+    var providerId by remember { mutableStateOf("") }
+    var apiKey by remember { mutableStateOf("") }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(topStart = 36.dp, topEnd = 36.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(stringResource(R.string.navi_login_provider_title), style = MaterialTheme.typography.headlineSmall)
+            OutlinedTextField(value = providerId, onValueChange = { providerId = it }, label = { Text(stringResource(R.string.provider_id_label)) }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = apiKey, onValueChange = { apiKey = it }, label = { Text(stringResource(R.string.provider_api_key_label)) }, modifier = Modifier.fillMaxWidth())
+            Button(
+                enabled = providerId.isNotBlank() && apiKey.isNotBlank(),
+                onClick = { onSubmit(providerId.trim(), apiKey.trim()) },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(stringResource(R.string.provider_submit)) }
+        }
+    }
 }

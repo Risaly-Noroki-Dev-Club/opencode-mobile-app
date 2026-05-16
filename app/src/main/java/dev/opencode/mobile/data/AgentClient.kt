@@ -289,6 +289,70 @@ class AgentClient(
         )
     }
 
+    suspend fun addProvider(
+        serverUrl: String,
+        token: String,
+        id: String,
+        baseURL: String,
+        apiKey: String,
+        models: Map<String, String> = emptyMap(),
+    ): Unit = withContext(Dispatchers.IO) {
+        val modelsObj = buildJsonObject {
+            models.forEach { (mid, name) ->
+                put(mid, buildJsonObject {
+                    put("name", name)
+                    put("context", 128000)
+                    put("output", 32000)
+                })
+            }
+        }
+        val body = buildJsonObject {
+            put("id", id)
+            put("baseURL", baseURL)
+            put("apiKey", apiKey)
+            put("models", modelsObj)
+        }
+        postJson<OkResponse>(
+            url = "${serverUrl.trim().trimEnd('/')}/providers",
+            token = token,
+            body = json.encodeToString(body),
+        )
+    }
+
+    suspend fun addModel(
+        serverUrl: String,
+        token: String,
+        providerId: String,
+        modelId: String,
+        modelName: String,
+    ): Unit = withContext(Dispatchers.IO) {
+        val body = buildJsonObject {
+            put("modelId", modelId)
+            put("name", modelName)
+        }
+        postJson<OkResponse>(
+            url = "${serverUrl.trim().trimEnd('/')}/providers/$providerId/models",
+            token = token,
+            body = json.encodeToString(body),
+        )
+    }
+
+    suspend fun loginProvider(
+        serverUrl: String,
+        token: String,
+        providerId: String,
+        apiKey: String,
+    ): Unit = withContext(Dispatchers.IO) {
+        val body = buildJsonObject {
+            put("apiKey", apiKey)
+        }
+        postJson<OkResponse>(
+            url = "${serverUrl.trim().trimEnd('/')}/providers/$providerId/auth",
+            token = token,
+            body = json.encodeToString(body),
+        )
+    }
+
     private inline fun <reified T> getJson(url: String, tokenRequired: Boolean, token: String): T {
         val builder = Request.Builder().url(url)
         if (tokenRequired) builder.header("Authorization", "Bearer $token")
@@ -568,4 +632,9 @@ private data class MessageHistoryItem(
 @Serializable
 private data class MessageInfo(
     val role: String,
+)
+
+@Serializable
+private data class OkResponse(
+    val ok: Boolean = false,
 )

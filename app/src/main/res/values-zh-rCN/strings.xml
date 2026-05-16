@@ -62,4 +62,18 @@
     <string name="agent_status_title">Agent 状态</string>
     <string name="agent_status_projects">项目数量：%1$d。来源：%2$s。</string>
     <string name="opencode_version">OpenCode %1$s</string>
+    <string name="navi_section_providers">Provider 管理</string>
+    <string name="navi_add_provider_title">添加 Provider</string>
+    <string name="navi_add_provider_description">注册一个 OpenAI 兼容的 Provider。</string>
+    <string name="navi_add_model_title">添加模型</string>
+    <string name="navi_add_model_description">给已有 Provider 添加一个模型。</string>
+    <string name="navi_login_provider_title">登录 Provider</string>
+    <string name="navi_login_provider_description">为内置 Provider 设置 API Key。</string>
+    <string name="provider_id_label">Provider ID</string>
+    <string name="provider_base_url_label">Base URL</string>
+    <string name="provider_api_key_label">API Key</string>
+    <string name="provider_model_id_label">模型 ID</string>
+    <string name="provider_model_name_label">模型名称</string>
+    <string name="provider_submit">提交</string>
+    <string name="provider_success">完成，模型列表即将刷新。</string>
 </resources>

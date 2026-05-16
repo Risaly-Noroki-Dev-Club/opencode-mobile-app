@@ -62,4 +62,18 @@
     <string name="agent_status_title">Agent status</string>
     <string name="agent_status_projects">Projects: %1$d. Source: %2$s.</string>
     <string name="opencode_version">OpenCode %1$s</string>
+    <string name="navi_section_providers">Providers</string>
+    <string name="navi_add_provider_title">Add provider</string>
+    <string name="navi_add_provider_description">Register a new OpenAI-compatible provider.</string>
+    <string name="navi_add_model_title">Add model</string>
+    <string name="navi_add_model_description">Add a model to an existing provider.</string>
+    <string name="navi_login_provider_title">Login provider</string>
+    <string name="navi_login_provider_description">Set API key for a built-in provider.</string>
+    <string name="provider_id_label">Provider ID</string>
+    <string name="provider_base_url_label">Base URL</string>
+    <string name="provider_api_key_label">API Key</string>
+    <string name="provider_model_id_label">Model ID</string>
+    <string name="provider_model_name_label">Model name</string>
+    <string name="provider_submit">Submit</string>
+    <string name="provider_success">Done. Models will refresh.</string>
 </resources>
