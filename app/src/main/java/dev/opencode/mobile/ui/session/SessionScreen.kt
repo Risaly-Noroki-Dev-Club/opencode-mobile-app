@@ -77,7 +77,7 @@ private data class ChatMessage(
     val text: String,
 )
 
-private enum class ChatRole { User, Assistant, System, Tool }
+private enum class ChatRole { User, Assistant, System, Tool, Working }
 
 private enum class StreamStatus { Connecting, Connected, Reconnecting, Disconnected, Error }
 
@@ -220,9 +220,10 @@ fun SessionScreen(
         }
     }
 
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty() && listState.isNearBottom()) {
-            listState.animateScrollToItem(messages.lastIndex)
+    LaunchedEffect(messages.size, messages.lastOrNull()?.text, sessionId, awaitingResponse) {
+        if ((messages.isNotEmpty() || awaitingResponse) && listState.isNearBottom()) {
+            val targetIndex = if (awaitingResponse) messages.size else messages.lastIndex
+            listState.animateScrollToItem(targetIndex)
         }
     }
 
@@ -429,6 +430,14 @@ fun SessionScreen(
                     items(messages) { message ->
                         MessageCard(message = message, onRetry = { retryText -> input = retryText })
                     }
+                    if (awaitingResponse) {
+                        item {
+                            WorkingMessageCard(
+                                streamStatus = streamStatus,
+                                waitingSinceMs = waitingSinceMs,
+                            )
+                        }
+                    }
                 }
                 if (!listState.isNearBottom() && messages.isNotEmpty()) {
                     TextButton(
@@ -475,7 +484,6 @@ fun SessionScreen(
                             busy = true
                             awaitingResponse = true
                             waitingSinceMs = System.currentTimeMillis()
-                            messages += ChatMessage(ChatRole.System, "Working… waiting for opencode response")
                             scope.launch {
                                 runCatching { agentClient.promptAsync(connection.serverUrl, connection.token, activeSessionId, text, selectedModel, activeSession.directory) }
                                     .onFailure {
@@ -791,12 +799,14 @@ private fun MessageCard(message: ChatMessage, onRetry: (String) -> Unit) {
         ChatRole.Assistant -> MaterialTheme.colors.onSurface.copy(alpha = 0.08f)
         ChatRole.System -> MaterialTheme.colors.secondary.copy(alpha = 0.12f)
         ChatRole.Tool -> MaterialTheme.colors.secondary.copy(alpha = 0.08f)
+        ChatRole.Working -> MaterialTheme.adventure.accent.copy(alpha = 0.18f)
     }
     val title = when (message.role) {
         ChatRole.User -> stringResource(R.string.role_user)
         ChatRole.Assistant -> stringResource(R.string.role_assistant)
         ChatRole.System -> stringResource(R.string.role_system)
         ChatRole.Tool -> stringResource(R.string.role_tool)
+        ChatRole.Working -> "Working"
     }
     Card(
         backgroundColor = containerColor,
@@ -838,6 +848,38 @@ private fun MessageCard(message: ChatMessage, onRetry: (String) -> Unit) {
                     }) { Text(stringResource(R.string.retry_prompt_button)) }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun WorkingMessageCard(streamStatus: StreamStatus, waitingSinceMs: Long?) {
+    val elapsed = waitingSinceMs?.let { ((System.currentTimeMillis() - it) / 1000).coerceAtLeast(0) }
+    AdventureCard(
+        modifier = Modifier.fillMaxWidth(),
+        backgroundColor = MaterialTheme.adventure.accent.copy(alpha = 0.18f),
+        contentColor = MaterialTheme.colors.onSurface,
+        elevation = 2.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                text = "Agent is working",
+                style = MaterialTheme.typography.subtitle1,
+                color = MaterialTheme.adventure.accent,
+            )
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            Text(
+                text = if (elapsed != null) {
+                    "Prompt accepted · ${streamStatus.label()} · ${elapsed}s"
+                } else {
+                    "Prompt accepted · ${streamStatus.label()}"
+                },
+                style = MaterialTheme.typography.body2,
+                color = MaterialTheme.adventure.textMedium,
+            )
         }
     }
 }
@@ -912,6 +954,7 @@ private fun ChatMessage.toCachedMessage(): CachedChatMessage {
         ChatRole.User -> "user"
         ChatRole.Assistant -> "assistant"
         ChatRole.Tool -> "tool"
+        ChatRole.Working -> "system"
         ChatRole.System -> "system"
     }
     return CachedChatMessage(role = roleName, text = text)

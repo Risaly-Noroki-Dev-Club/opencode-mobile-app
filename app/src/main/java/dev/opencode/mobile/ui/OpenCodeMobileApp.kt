@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.Surface
 import androidx.compose.runtime.Composable
@@ -24,6 +25,14 @@ private sealed interface AppScreen {
 @Composable
 fun OpenCodeMobileApp() {
     var screen by remember { mutableStateOf<AppScreen>(AppScreen.Connect) }
+    BackHandler(enabled = screen !is AppScreen.Connect) {
+        screen = when (val active = screen) {
+            AppScreen.Connect -> AppScreen.Connect
+            is AppScreen.Projects -> AppScreen.Connect
+            is AppScreen.Sessions -> AppScreen.Projects(active.connection)
+            is AppScreen.Chat -> AppScreen.Sessions(active.connection, active.project)
+        }
+    }
     Surface(modifier = Modifier.fillMaxSize()) {
         when (val active = screen) {
             AppScreen.Connect -> ConnectScreen(onConnected = { screen = AppScreen.Projects(it) })
